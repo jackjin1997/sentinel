@@ -162,6 +162,10 @@ Synthesize a final actionable report. Output ONLY valid JSON, nothing else, matc
       model: anthropic("claude-haiku-4-5"),
       prompt: consolidatePrompt,
       abortSignal: deps.signal,
+      // Bounded — consolidate output is a small JSON object. Without this, a
+      // prompt-injected or runaway response could buffer arbitrary text before
+      // the regex/parse on the next line.
+      maxOutputTokens: 2000,
     });
     if (deps.signal?.aborted) return;
     const jsonMatch = text.match(/\{[\s\S]*\}/);
@@ -197,20 +201,32 @@ interface StreamingPhaseOpts {
 // Hard cap per phase. Prevents a runaway LLM from ballooning request memory
 // or poisoning downstream phase prompts (each phase's output feeds the next).
 const MAX_PHASE_OUTPUT_CHARS = 200_000;
+// Soft cap on the provider side so the API stops generating instead of us just
+// dropping bytes locally. 8k tokens is ~32KB which is well within the phase
+// system-prompt budget (triage = 3 lines, investigator <250 words, etc.).
+const MAX_PHASE_OUTPUT_TOKENS = 8000;
 
 async function runStreamingPhase(opts: StreamingPhaseOpts): Promise<string> {
   let collected = "";
   let truncated = false;
+  // Per-phase controller so we can stop the provider stream when we hit our
+  // local char cap. Linked to the parent so client disconnect still cascades.
+  const phaseAbort = new AbortController();
+  if (opts.signal) {
+    if (opts.signal.aborted) phaseAbort.abort();
+    else opts.signal.addEventListener("abort", () => phaseAbort.abort(), { once: true });
+  }
   try {
     const { fullStream } = streamText({
       model: opts.model,
       system: opts.system,
       prompt: opts.prompt,
-      abortSignal: opts.signal,
+      abortSignal: phaseAbort.signal,
+      maxOutputTokens: MAX_PHASE_OUTPUT_TOKENS,
       ...(opts.useTools ? { tools, stopWhen: stepCountIs(opts.maxSteps) } : {}),
     });
     for await (const part of fullStream) {
-      if (opts.signal?.aborted) return collected;
+      if (phaseAbort.signal.aborted) return collected;
       // Debug: log every event type to server console
       if (process.env.SENTINEL_DEBUG === "1") {
         console.log("[stream-part]", part.type, "id" in part ? part.id : "");
@@ -221,6 +237,7 @@ async function runStreamingPhase(opts: StreamingPhaseOpts): Promise<string> {
           const remaining = MAX_PHASE_OUTPUT_CHARS - collected.length;
           if (remaining <= 0) {
             truncated = true;
+            phaseAbort.abort();
             await opts.emit({
               type: "error",
               message: `phase output exceeded ${MAX_PHASE_OUTPUT_CHARS} chars — truncating`,
@@ -232,6 +249,7 @@ async function runStreamingPhase(opts: StreamingPhaseOpts): Promise<string> {
           await opts.emit({ type: "text-delta", delta: chunk });
           if (chunk.length < part.text.length) {
             truncated = true;
+            phaseAbort.abort();
             await opts.emit({
               type: "error",
               message: `phase output exceeded ${MAX_PHASE_OUTPUT_CHARS} chars — truncating`,
@@ -258,7 +276,8 @@ async function runStreamingPhase(opts: StreamingPhaseOpts): Promise<string> {
       }
     }
   } catch (err) {
-    if (opts.signal?.aborted) return collected;
+    // Swallow if either we aborted intentionally (truncation) or parent aborted.
+    if (phaseAbort.signal.aborted) return collected;
     await opts.emit({ type: "error", message: (err as Error).message });
   }
   return collected;
