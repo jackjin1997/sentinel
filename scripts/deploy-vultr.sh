@@ -10,8 +10,18 @@ if [ $# -lt 1 ]; then
 fi
 
 VULTR_IP="$1"
-SSH_OPTS="-o StrictHostKeyChecking=accept-new -o ConnectTimeout=10"
+SSH_KEY="${SSH_KEY:-$HOME/.ssh/sentinel_vultr_ed25519}"
+SSH_BASE_OPTS="-o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 -o IdentitiesOnly=yes"
+SSH_OPTS="-i ${SSH_KEY} ${SSH_BASE_OPTS}"
+RSYNC_RSH="ssh -i ${SSH_KEY} ${SSH_BASE_OPTS}"
 REMOTE="root@${VULTR_IP}"
+
+if [ ! -f "${SSH_KEY}" ]; then
+  echo "SSH key not found at ${SSH_KEY}"
+  echo "Either generate with: ssh-keygen -t ed25519 -f ${SSH_KEY} -N ''"
+  echo "Or override: SSH_KEY=~/.ssh/your_key ./scripts/deploy-vultr.sh ${VULTR_IP}"
+  exit 1
+fi
 
 echo "==> Sentinel deploy targeting ${REMOTE}"
 ssh ${SSH_OPTS} "${REMOTE}" "echo connected as \$(whoami)" || {
@@ -36,7 +46,7 @@ REMOTE_PREP
 
 echo "==> Sync code..."
 ssh ${SSH_OPTS} "${REMOTE}" "mkdir -p /opt/sentinel"
-rsync -azP --exclude=node_modules --exclude=.next --exclude=.git --exclude=.env.local \
+rsync -e "${RSYNC_RSH}" -azP --exclude=node_modules --exclude=.next --exclude=.git --exclude=.env.local \
   ./ "${REMOTE}:/opt/sentinel/"
 scp ${SSH_OPTS} ./.env.local "${REMOTE}:/opt/sentinel/.env.local"
 
