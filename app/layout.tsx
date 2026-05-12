@@ -15,7 +15,24 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Sentinel · Autonomous Incident Response",
   description:
-    "Multi-vendor LLM agent for production incident response. Gemini Flash + Claude Sonnet investigate, diagnose, and recommend fixes in ~30 seconds. Built for AI Agent Olympics 2026.",
+    "Multi-vendor LLM agent for production incident response. Gemini Flash + Claude Sonnet investigate, diagnose, and recommend fixes in ~53 seconds. Adversarial cross-vendor review. Built for AI Agent Olympics 2026.",
+  metadataBase: new URL("https://tries-virtually-stockings-binary.trycloudflare.com"),
+  openGraph: {
+    title: "Sentinel · Autonomous Incident Response Agent",
+    description:
+      "When production breaks, three specialized LLMs investigate, diagnose, and recommend fixes in ~53 seconds — with adversarial cross-vendor review. Multi-vendor truth.",
+    url: "https://tries-virtually-stockings-binary.trycloudflare.com",
+    siteName: "Sentinel",
+    images: [{ url: "/og/og-image.png", width: 1200, height: 630, alt: "Sentinel dashboard showing multi-vendor LLM incident response trace" }],
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Sentinel · Autonomous Incident Response",
+    description: "Multi-vendor LLM agent (Gemini + Claude) for production incident response. ~53s MTTR. Adversarial cross-vendor review.",
+    images: ["/og/og-image.png"],
+    creator: "@jackjin1997",
+  },
 };
 
 export default function RootLayout({
