@@ -10,6 +10,9 @@
 
 
 **🚀 Live demo**: https://tries-virtually-stockings-binary.trycloudflare.com
+
+---
+
 When your service breaks at 3am, Sentinel investigates, diagnoses, and recommends fixes — like having a senior SRE on call 24/7. It coordinates **four specialized phases across two vendors** so the diagnosis is reviewed by genuinely different model bias before action is taken:
 
 | # | Phase | Model | Role |
