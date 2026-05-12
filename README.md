@@ -2,6 +2,12 @@
 
 > **Autonomous Incident Response Agent · multi-vendor LLM orchestration · ~53s MTTR**
 
+[![Hackathon](https://img.shields.io/badge/AI%20Agent%20Olympics-2026-fuchsia)](https://lablab.ai/ai-hackathons/milan-ai-week-hackathon)
+[![Stack](https://img.shields.io/badge/Next.js-16-black)](https://nextjs.org)
+[![Models](https://img.shields.io/badge/Gemini-2.5--Flash-4285F4)](https://aistudio.google.com)
+[![Models](https://img.shields.io/badge/Claude-Sonnet%204.6-D97757)](https://anthropic.com)
+[![License](https://img.shields.io/badge/license-MIT-green)](./LICENSE)
+
 When your service breaks at 3am, Sentinel investigates, diagnoses, and recommends fixes — like having a senior SRE on call 24/7. It coordinates **four specialized phases across two vendors** so the diagnosis is reviewed by genuinely different model bias before action is taken:
 
 | # | Phase | Model | Role |

@@ -97,7 +97,7 @@ All copy-paste-ready text for AI Agent Olympics (5/20) + Transforming Enterprise
 > Auto-fallback to Claude Haiku if either vendor hits quota. Demo never breaks.
 
 **8/8** (CTA)
-> Code: github.com/jackjin1997/sentinel
+> Code: https://github.com/jackjin1997/sentinel
 > Live demo: <vultr-url>
 > Built for AI Agent Olympics 2026 + Transforming Enterprise track.
 
