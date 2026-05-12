@@ -64,12 +64,25 @@ export default function Home() {
   const [runFinishedAt, setRunFinishedAt] = useState<number | null>(null);
   const [nowTick, setNowTick] = useState(Date.now());
   const traceRef = useRef<HTMLDivElement>(null);
+  // Cancel in-flight investigation on unmount, navigation, or HMR. Without
+  // these the SSE reader keeps consuming after the component disappears and
+  // the server keeps spending LLM tokens until network-level disconnect.
+  const abortRef = useRef<AbortController | null>(null);
+  const readerRef = useRef<ReadableStreamDefaultReader<Uint8Array> | null>(null);
 
   useEffect(() => {
     fetch("/api/incidents")
       .then((r) => r.json())
       .then((d) => setIncidents(d.incidents));
   }, []);
+
+  useEffect(
+    () => () => {
+      abortRef.current?.abort();
+      readerRef.current?.cancel().catch(() => {});
+    },
+    [],
+  );
 
   useEffect(() => {
     if (!running) return;
@@ -82,6 +95,10 @@ export default function Home() {
   }, [phases, finalReport]);
 
   async function startInvestigation(id: string) {
+    // Cancel any prior run that's somehow still alive before starting a new one.
+    abortRef.current?.abort();
+    readerRef.current?.cancel().catch(() => {});
+
     setSelected(id);
     setPhases([]);
     setFinalReport(null);
@@ -90,11 +107,22 @@ export default function Home() {
     setRunFinishedAt(null);
     setRunning(true);
 
-    const res = await fetch("/api/agent", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ incidentId: id }),
-    });
+    const ac = new AbortController();
+    abortRef.current = ac;
+
+    let res: Response;
+    try {
+      res = await fetch("/api/agent", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ incidentId: id }),
+        signal: ac.signal,
+      });
+    } catch (err) {
+      if ((err as Error).name !== "AbortError") setErrorMsg("Failed to start agent");
+      setRunning(false);
+      return;
+    }
     if (!res.ok || !res.body) {
       setErrorMsg("Failed to start agent");
       setRunning(false);
@@ -102,12 +130,25 @@ export default function Home() {
     }
 
     const reader = res.body.getReader();
+    readerRef.current = reader;
     const dec = new TextDecoder();
     let buf = "";
     let currentPhase: Phase | null = null;
 
+    let cancelled = false;
     while (true) {
-      const { value, done } = await reader.read();
+      let value: Uint8Array | undefined;
+      let done = false;
+      try {
+        ({ value, done } = await reader.read());
+      } catch (err) {
+        if ((err as Error).name === "AbortError" || ac.signal.aborted) {
+          cancelled = true;
+          break;
+        }
+        setErrorMsg((err as Error).message);
+        break;
+      }
       if (done) break;
       buf += dec.decode(value, { stream: true });
       const lines = buf.split("\n");
@@ -176,8 +217,10 @@ export default function Home() {
         }
       }
     }
+    if (abortRef.current === ac) abortRef.current = null;
+    if (readerRef.current === reader) readerRef.current = null;
     setRunning(false);
-    setRunFinishedAt(Date.now());
+    if (!cancelled) setRunFinishedAt(Date.now());
   }
 
   const elapsedMs = runStartedAt
