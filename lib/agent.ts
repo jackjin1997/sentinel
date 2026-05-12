@@ -194,8 +194,13 @@ interface StreamingPhaseOpts {
   signal?: AbortSignal;
 }
 
+// Hard cap per phase. Prevents a runaway LLM from ballooning request memory
+// or poisoning downstream phase prompts (each phase's output feeds the next).
+const MAX_PHASE_OUTPUT_CHARS = 200_000;
+
 async function runStreamingPhase(opts: StreamingPhaseOpts): Promise<string> {
   let collected = "";
+  let truncated = false;
   try {
     const { fullStream } = streamText({
       model: opts.model,
@@ -211,10 +216,30 @@ async function runStreamingPhase(opts: StreamingPhaseOpts): Promise<string> {
         console.log("[stream-part]", part.type, "id" in part ? part.id : "");
       }
       switch (part.type) {
-        case "text-delta":
-          collected += part.text;
-          await opts.emit({ type: "text-delta", delta: part.text });
+        case "text-delta": {
+          if (truncated) break;
+          const remaining = MAX_PHASE_OUTPUT_CHARS - collected.length;
+          if (remaining <= 0) {
+            truncated = true;
+            await opts.emit({
+              type: "error",
+              message: `phase output exceeded ${MAX_PHASE_OUTPUT_CHARS} chars — truncating`,
+            });
+            return collected;
+          }
+          const chunk = part.text.length > remaining ? part.text.slice(0, remaining) : part.text;
+          collected += chunk;
+          await opts.emit({ type: "text-delta", delta: chunk });
+          if (chunk.length < part.text.length) {
+            truncated = true;
+            await opts.emit({
+              type: "error",
+              message: `phase output exceeded ${MAX_PHASE_OUTPUT_CHARS} chars — truncating`,
+            });
+            return collected;
+          }
           break;
+        }
         case "tool-call":
           await opts.emit({ type: "tool-call", name: part.toolName, args: part.input });
           break;
