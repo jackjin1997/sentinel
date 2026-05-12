@@ -15,6 +15,7 @@ export type AgentEvent =
 
 export interface AgentDeps {
   emit: (e: AgentEvent) => void | Promise<void>;
+  signal?: AbortSignal;
 }
 
 const TRIAGE_SYSTEM = `You are Sentinel-Triage, a senior SRE doing first-pass investigation of a production incident.
@@ -46,6 +47,7 @@ export async function runIncidentAgent(incidentId: string, deps: AgentDeps): Pro
     await deps.emit({ type: "error", message: `Unknown incident ${incidentId}` });
     return;
   }
+  if (deps.signal?.aborted) return;
 
   const incidentBrief = `## Incident ${incident.id}: ${incident.title}
 - Service: ${incident.service}
@@ -63,7 +65,9 @@ ${incident.symptoms.map((s) => `  - ${s}`).join("\n")}`;
     useTools: true,
     maxSteps: 6,
     emit: deps.emit,
+    signal: deps.signal,
   });
+  if (deps.signal?.aborted) return;
   if (!triageText.trim()) {
     // Gemini failed — fallback to Claude Haiku so demo never breaks
     await deps.emit({ type: "phase", phase: "triage", model: "claude-haiku-4-5 (fallback)" });
@@ -74,11 +78,14 @@ ${incident.symptoms.map((s) => `  - ${s}`).join("\n")}`;
       useTools: true,
       maxSteps: 6,
       emit: deps.emit,
+      signal: deps.signal,
     });
+    if (deps.signal?.aborted) return;
   }
   await deps.emit({ type: "phase-complete", phase: "triage", summary: triageText });
 
   // PHASE 2: DEEP INVESTIGATION (Claude Sonnet — heaviest reasoning, different vendor)
+  if (deps.signal?.aborted) return;
   await deps.emit({ type: "phase", phase: "investigate", model: "claude-sonnet-4-6" });
   const investigatorPrompt = `${incidentBrief}
 
@@ -93,10 +100,13 @@ Now form your principal-engineer diagnosis. Use searchRunbook to find matching i
     useTools: true,
     maxSteps: 5,
     emit: deps.emit,
+    signal: deps.signal,
   });
+  if (deps.signal?.aborted) return;
   await deps.emit({ type: "phase-complete", phase: "investigate", summary: diagnosisText });
 
   // PHASE 3: ADVERSARIAL REVIEW (Gemini Flash with Claude Haiku fallback)
+  if (deps.signal?.aborted) return;
   await deps.emit({ type: "phase", phase: "adversarial-review", model: "gemini-2.5-flash" });
   const reviewerPrompt = `${incidentBrief}
 
@@ -111,7 +121,9 @@ Critique this diagnosis. You're a different vendor's model — your job is to ch
     useTools: false,
     maxSteps: 1,
     emit: deps.emit,
+    signal: deps.signal,
   });
+  if (deps.signal?.aborted) return;
   if (!reviewText.trim()) {
     await deps.emit({ type: "phase", phase: "adversarial-review", model: "claude-haiku-4-5 (fallback)" });
     reviewText = await runStreamingPhase({
@@ -121,11 +133,14 @@ Critique this diagnosis. You're a different vendor's model — your job is to ch
       useTools: false,
       maxSteps: 1,
       emit: deps.emit,
+      signal: deps.signal,
     });
+    if (deps.signal?.aborted) return;
   }
   await deps.emit({ type: "phase-complete", phase: "adversarial-review", summary: reviewText });
 
   // PHASE 4: CONSOLIDATE (Claude Haiku — fast structured JSON synthesis)
+  if (deps.signal?.aborted) return;
   await deps.emit({ type: "phase", phase: "consolidate", model: "claude-haiku-4-5" });
   const consolidatePrompt = `${incidentBrief}
 
@@ -146,7 +161,9 @@ Synthesize a final actionable report. Output ONLY valid JSON, nothing else, matc
     const { text } = await generateText({
       model: anthropic("claude-haiku-4-5"),
       prompt: consolidatePrompt,
+      abortSignal: deps.signal,
     });
+    if (deps.signal?.aborted) return;
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
       const parsed = JSON.parse(jsonMatch[0]);
@@ -162,6 +179,7 @@ Synthesize a final actionable report. Output ONLY valid JSON, nothing else, matc
       await deps.emit({ type: "text-delta", delta: text });
     }
   } catch (err) {
+    if (deps.signal?.aborted) return;
     await deps.emit({ type: "error", message: `Consolidation failed: ${(err as Error).message}` });
   }
 }
@@ -173,6 +191,7 @@ interface StreamingPhaseOpts {
   useTools: boolean;
   maxSteps: number;
   emit: (e: AgentEvent) => void | Promise<void>;
+  signal?: AbortSignal;
 }
 
 async function runStreamingPhase(opts: StreamingPhaseOpts): Promise<string> {
@@ -182,9 +201,11 @@ async function runStreamingPhase(opts: StreamingPhaseOpts): Promise<string> {
       model: opts.model,
       system: opts.system,
       prompt: opts.prompt,
+      abortSignal: opts.signal,
       ...(opts.useTools ? { tools, stopWhen: stepCountIs(opts.maxSteps) } : {}),
     });
     for await (const part of fullStream) {
+      if (opts.signal?.aborted) return collected;
       // Debug: log every event type to server console
       if (process.env.SENTINEL_DEBUG === "1") {
         console.log("[stream-part]", part.type, "id" in part ? part.id : "");
@@ -212,6 +233,7 @@ async function runStreamingPhase(opts: StreamingPhaseOpts): Promise<string> {
       }
     }
   } catch (err) {
+    if (opts.signal?.aborted) return collected;
     await opts.emit({ type: "error", message: (err as Error).message });
   }
   return collected;

@@ -9,19 +9,46 @@ export async function POST(req: Request) {
     return new Response(JSON.stringify({ error: "incidentId required" }), { status: 400 });
   }
 
+  // Client disconnect → abort the agent so we stop burning LLM tokens
+  // and don't leave zombie streamText loops eating memory on the server.
+  const ac = new AbortController();
+  req.signal.addEventListener("abort", () => ac.abort(), { once: true });
+
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
     async start(controller) {
+      let closed = false;
       const send = (event: AgentEvent) => {
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
+        if (closed || ac.signal.aborted) return;
+        try {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
+        } catch {
+          closed = true;
+          ac.abort();
+        }
       };
       try {
-        await runIncidentAgent(incidentId, { emit: send });
+        await runIncidentAgent(incidentId, { emit: send, signal: ac.signal });
       } catch (err) {
-        send({ type: "error", message: (err as Error).message });
+        if (!ac.signal.aborted && !closed) {
+          send({ type: "error", message: (err as Error).message });
+        }
       }
-      controller.enqueue(encoder.encode("event: done\ndata: {}\n\n"));
-      controller.close();
+      if (!closed && !ac.signal.aborted) {
+        try {
+          controller.enqueue(encoder.encode("event: done\ndata: {}\n\n"));
+        } catch {
+          // consumer already gone
+        }
+      }
+      try {
+        controller.close();
+      } catch {
+        // already closed
+      }
+    },
+    cancel() {
+      ac.abort();
     },
   });
 
