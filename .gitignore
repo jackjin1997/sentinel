@@ -39,3 +39,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# raw SSE samples (large, regeneratable) — keep only SAMPLES.md
+samples/*.sse
+samples/extract.py
