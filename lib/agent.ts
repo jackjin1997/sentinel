@@ -212,25 +212,35 @@ const MAX_PHASE_OUTPUT_TOKENS = 8000;
 async function runStreamingPhase(opts: StreamingPhaseOpts): Promise<string> {
   let collected = "";
   let truncated = false;
-  // Per-phase controller so we can stop the provider stream when we hit our
-  // local char cap. Linked to the parent so client disconnect still cascades.
+  // Per-phase controller, transparently linked to the parent via AbortSignal.any.
+  // Client disconnect cascades down AND we can stop the provider stream
+  // independently when we hit MAX_PHASE_OUTPUT_CHARS. Using AbortSignal.any
+  // instead of addEventListener avoids accumulating listeners on the parent
+  // signal across the 4 phases of a single request.
   const phaseAbort = new AbortController();
-  if (opts.signal) {
-    if (opts.signal.aborted) phaseAbort.abort();
-    else opts.signal.addEventListener("abort", () => phaseAbort.abort(), { once: true });
-  }
+  const abortSignal = opts.signal
+    ? AbortSignal.any([opts.signal, phaseAbort.signal])
+    : phaseAbort.signal;
+  const truncateAndReturn = async () => {
+    truncated = true;
+    phaseAbort.abort();
+    await opts.emit({
+      type: "error",
+      message: `phase output exceeded ${MAX_PHASE_OUTPUT_CHARS} chars — truncating`,
+    });
+    return collected;
+  };
   try {
     const { fullStream } = streamText({
       model: opts.model,
       system: opts.system,
       prompt: opts.prompt,
-      abortSignal: phaseAbort.signal,
+      abortSignal,
       maxOutputTokens: MAX_PHASE_OUTPUT_TOKENS,
       ...(opts.useTools ? { tools, stopWhen: stepCountIs(opts.maxSteps) } : {}),
     });
     for await (const part of fullStream) {
-      if (phaseAbort.signal.aborted) return collected;
-      // Debug: log every event type to server console
+      if (abortSignal.aborted) return collected;
       if (process.env.SENTINEL_DEBUG === "1") {
         console.log("[stream-part]", part.type, "id" in part ? part.id : "");
       }
@@ -238,27 +248,11 @@ async function runStreamingPhase(opts: StreamingPhaseOpts): Promise<string> {
         case "text-delta": {
           if (truncated) break;
           const remaining = MAX_PHASE_OUTPUT_CHARS - collected.length;
-          if (remaining <= 0) {
-            truncated = true;
-            phaseAbort.abort();
-            await opts.emit({
-              type: "error",
-              message: `phase output exceeded ${MAX_PHASE_OUTPUT_CHARS} chars — truncating`,
-            });
-            return collected;
-          }
+          if (remaining <= 0) return await truncateAndReturn();
           const chunk = part.text.length > remaining ? part.text.slice(0, remaining) : part.text;
           collected += chunk;
           await opts.emit({ type: "text-delta", delta: chunk });
-          if (chunk.length < part.text.length) {
-            truncated = true;
-            phaseAbort.abort();
-            await opts.emit({
-              type: "error",
-              message: `phase output exceeded ${MAX_PHASE_OUTPUT_CHARS} chars — truncating`,
-            });
-            return collected;
-          }
+          if (chunk.length < part.text.length) return await truncateAndReturn();
           break;
         }
         case "tool-call":
@@ -274,13 +268,11 @@ async function runStreamingPhase(opts: StreamingPhaseOpts): Promise<string> {
           return collected;
         }
         default:
-          // ignore other event types (text-start, text-end, finish, etc.)
           break;
       }
     }
   } catch (err) {
-    // Swallow if either we aborted intentionally (truncation) or parent aborted.
-    if (phaseAbort.signal.aborted) return collected;
+    if (abortSignal.aborted) return collected;
     await opts.emit({ type: "error", message: (err as Error).message });
   }
   return collected;

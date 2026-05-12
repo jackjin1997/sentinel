@@ -29,13 +29,15 @@ export const queryMetrics = tool({
       .string()
       .optional()
       .describe("Specific metric name; omit to get all available metrics for this service"),
+    // Bounds tool output so real telemetry doesn't dump unbounded arrays into
+    // the LLM context.
     limit: z
       .number()
       .int()
       .min(1)
       .max(200)
       .default(60)
-      .describe("Max points to return (newest first). Bounds tool output so real telemetry doesn't dump unbounded arrays into LLM context."),
+      .describe("Max points to return, newest first."),
   }),
   execute: async ({ service, metric, limit }) => {
     const points = METRICS_BY_SERVICE[service] ?? [];

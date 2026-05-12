@@ -10,9 +10,10 @@ export const dynamic = "force-dynamic";
 // content-length can still push us up to the platform's body limit).
 const MAX_BODY_BYTES = 1024;
 
-// Slow-consumer ceiling. If 200 consecutive emits land while the consumer's
-// desiredSize is non-positive, assume the client is gone or hopelessly slow
-// (mobile NAT, sleeping proxy, etc.) and stop the run.
+// Slow-consumer ceiling. Cumulative — once we've emitted 200 events while the
+// consumer's desiredSize is non-positive, the client is gone or hopelessly
+// slow (mobile NAT, sleeping proxy) and we stop the run. Not "consecutive": a
+// resetting threshold is trivially defeated by an occasional drain.
 const MAX_BACKPRESSURE_MISSES = 200;
 
 export async function POST(req: Request) {
@@ -57,17 +58,15 @@ export async function POST(req: Request) {
             ac.abort();
             return;
           }
-          // Slow-consumer detection. desiredSize goes <= 0 when the internal
-          // queue is at or above its highWaterMark. Sustained pressure means
-          // the consumer isn't draining — stop wasting tokens.
+          // Slow-consumer detection. desiredSize <= 0 means the internal
+          // queue is at or above its highWaterMark — count cumulatively (no
+          // reset on a single healthy emit, see MAX_BACKPRESSURE_MISSES note).
           if (controller.desiredSize !== null && controller.desiredSize <= 0) {
             backpressureMisses++;
             if (backpressureMisses >= MAX_BACKPRESSURE_MISSES) {
               closed = true;
               ac.abort();
             }
-          } else {
-            backpressureMisses = 0;
           }
         };
         try {
