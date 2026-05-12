@@ -64,12 +64,25 @@ export default function Home() {
   const [runFinishedAt, setRunFinishedAt] = useState<number | null>(null);
   const [nowTick, setNowTick] = useState(Date.now());
   const traceRef = useRef<HTMLDivElement>(null);
+  // Batch high-frequency text-delta events into one setState per animation frame.
+  // Otherwise every LLM token (hundreds-to-thousands per phase) triggers a full
+  // re-render with a fresh [...phases] array copy — fine for one run, but
+  // browser memory and CPU climb across multiple re-runs.
+  const pendingDeltasRef = useRef<{ phase: Phase; text: string }[]>([]);
+  const rafIdRef = useRef<number | null>(null);
 
   useEffect(() => {
     fetch("/api/incidents")
       .then((r) => r.json())
       .then((d) => setIncidents(d.incidents));
   }, []);
+
+  useEffect(
+    () => () => {
+      if (rafIdRef.current !== null) cancelAnimationFrame(rafIdRef.current);
+    },
+    [],
+  );
 
   useEffect(() => {
     if (!running) return;
@@ -106,6 +119,27 @@ export default function Home() {
     let buf = "";
     let currentPhase: Phase | null = null;
 
+    const flushPendingDeltas = () => {
+      rafIdRef.current = null;
+      const pending = pendingDeltasRef.current;
+      if (pending.length === 0) return;
+      pendingDeltasRef.current = [];
+      setPhases((p) => {
+        const next = [...p];
+        for (const { phase, text } of pending) {
+          const idx = next.findLastIndex((x) => x.phase === phase);
+          if (idx >= 0) next[idx] = { ...next[idx], text: next[idx].text + text };
+        }
+        return next;
+      });
+    };
+    const flushNow = () => {
+      if (rafIdRef.current !== null) {
+        cancelAnimationFrame(rafIdRef.current);
+      }
+      flushPendingDeltas();
+    };
+
     while (true) {
       const { value, done } = await reader.read();
       if (done) break;
@@ -125,6 +159,9 @@ export default function Home() {
       }
       function handleEvent(ev: { type: string; [k: string]: unknown }) {
         if (ev.type === "phase") {
+          // Flush any pending deltas before changing phase so they land in the
+          // correct phase block.
+          flushNow();
           currentPhase = ev.phase as Phase;
           const model = ev.model as string;
           const isFallback = model.includes("fallback");
@@ -133,12 +170,10 @@ export default function Home() {
             { phase: currentPhase!, model, text: "", toolCalls: [], done: false, isFallback, startedAt: Date.now() },
           ]);
         } else if (ev.type === "text-delta" && currentPhase) {
-          setPhases((p) => {
-            const next = [...p];
-            const idx = next.findLastIndex((x) => x.phase === currentPhase);
-            if (idx >= 0) next[idx] = { ...next[idx], text: next[idx].text + (ev.delta as string) };
-            return next;
-          });
+          pendingDeltasRef.current.push({ phase: currentPhase, text: ev.delta as string });
+          if (rafIdRef.current === null) {
+            rafIdRef.current = requestAnimationFrame(flushPendingDeltas);
+          }
         } else if (ev.type === "tool-call" && currentPhase) {
           setPhases((p) => {
             const next = [...p];
@@ -163,6 +198,7 @@ export default function Home() {
             return next;
           });
         } else if (ev.type === "phase-complete" && currentPhase) {
+          flushNow();
           setPhases((p) => {
             const next = [...p];
             const idx = next.findLastIndex((x) => x.phase === currentPhase);
@@ -170,12 +206,14 @@ export default function Home() {
             return next;
           });
         } else if (ev.type === "final") {
+          flushNow();
           setFinalReport(ev.report as FinalReport);
         } else if (ev.type === "error") {
           setErrorMsg(ev.message as string);
         }
       }
     }
+    flushNow();
     setRunning(false);
     setRunFinishedAt(Date.now());
   }
