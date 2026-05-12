@@ -4,8 +4,10 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 // 1 KB is enough for the {"incidentId": "..."} envelope and gives plenty of
-// headroom. Rejecting larger bodies up front stops a public endpoint from
-// buffering attacker-controlled payloads before validation.
+// headroom. Header check filters honest oversize clients up front; the
+// post-text() length check is a second line of defense (note: req.text()
+// still fully buffers the body, so a malicious client lying about
+// content-length can still push us up to the platform's body limit).
 const MAX_BODY_BYTES = 1024;
 
 // Slow-consumer ceiling. If 200 consecutive emits land while the consumer's
