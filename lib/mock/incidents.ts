@@ -40,6 +40,34 @@ export const INCIDENTS: Incident[] = [
     ],
     status: "detected",
   },
+  {
+    id: "INC-004",
+    title: "search-api returning stale results after cache flush",
+    service: "search-api",
+    detectedAt: "2026-05-12T16:12:00Z",
+    severity: "high",
+    symptoms: [
+      "Users see search results from 6+ hours ago",
+      "Cache hit rate dropped 92% → 14% at 16:08Z",
+      "Redis evictions: 0 → 8000/min",
+      "No deploys in last 24h",
+    ],
+    status: "detected",
+  },
+  {
+    id: "INC-005",
+    title: "notification-worker — 100% Slack delivery failures",
+    service: "notification-worker",
+    detectedAt: "2026-05-12T13:30:00Z",
+    severity: "critical",
+    symptoms: [
+      "All Slack webhook posts returning 401 since 13:25Z",
+      "0 of 1247 alerts delivered in last hour",
+      "Email/SMS channels unaffected",
+      "Slack workspace admin rotated bot tokens 'yesterday'",
+    ],
+    status: "detected",
+  },
 ];
 
 export const LOGS_BY_SERVICE: Record<string, LogLine[]> = {
@@ -70,6 +98,24 @@ export const LOGS_BY_SERVICE: Record<string, LogLine[]> = {
     { ts: "11:44:58", service: "image-worker", level: "error", message: "Killed by OOMKiller — RSS 1018MB > limit 1024MB" },
     { ts: "11:45:02", service: "image-worker", level: "info", message: "Pod restarted, mem=180MB" },
   ],
+  "search-api": [
+    { ts: "16:07:30", service: "search-api", level: "info", message: "Cache hit ratio: 0.92 (45,200/49,100 last 1min)" },
+    { ts: "16:08:11", service: "search-api", level: "warn", message: "Redis OOM, eviction policy noeviction returned: OOM command not allowed when used memory > 'maxmemory'" },
+    { ts: "16:08:33", service: "search-api", level: "error", message: "Redis SET failed: OOM — falling back to read-only mode" },
+    { ts: "16:09:15", service: "search-api", level: "warn", message: "Cache hit ratio: 0.14 (6,800/48,500 last 1min) — degraded mode" },
+    { ts: "16:10:02", service: "search-api", level: "warn", message: "Backend ES queries up 5.8x — load spike on primary cluster" },
+    { ts: "16:11:44", service: "search-api", level: "error", message: "ES query timeout 30s — falling back to stale Redis snapshot from 09:48Z" },
+    { ts: "16:12:00", service: "search-api", level: "error", message: "User report: 'results haven't updated since this morning'" },
+  ],
+  "notification-worker": [
+    { ts: "13:24:11", service: "notification-worker", level: "info", message: "Posted alert to Slack #incidents — 200 OK" },
+    { ts: "13:25:01", service: "notification-worker", level: "error", message: "POST hooks.slack.com/services/T01.../B02.../xoxb-... returned 401 invalid_auth" },
+    { ts: "13:25:14", service: "notification-worker", level: "error", message: "POST hooks.slack.com/services/T01.../B02.../xoxb-... returned 401 invalid_auth" },
+    { ts: "13:26:00", service: "notification-worker", level: "error", message: "Slack delivery failure rate: 100% (last 50/50 attempts)" },
+    { ts: "13:27:33", service: "notification-worker", level: "warn", message: "Backoff: pausing Slack channel for 60s — error budget exhausted" },
+    { ts: "13:29:50", service: "notification-worker", level: "info", message: "Resumed Slack channel after backoff" },
+    { ts: "13:30:00", service: "notification-worker", level: "error", message: "POST hooks.slack.com — STILL 401 invalid_auth · escalating SEV-1" },
+  ],
 };
 
 export const METRICS_BY_SERVICE: Record<string, MetricPoint[]> = {
@@ -98,6 +144,23 @@ export const METRICS_BY_SERVICE: Record<string, MetricPoint[]> = {
     { ts: "11:42", service: "image-worker", metric: "container.mem_rss_mb", value: 920, unit: "MB" },
     { ts: "11:44", service: "image-worker", metric: "container.mem_rss_mb", value: 1018, unit: "MB" },
     { ts: "11:45", service: "image-worker", metric: "container.mem_rss_mb", value: 180, unit: "MB (after restart)" },
+  ],
+  "search-api": [
+    { ts: "16:05", service: "search-api", metric: "cache.hit_ratio", value: 0.93, unit: "ratio" },
+    { ts: "16:07", service: "search-api", metric: "cache.hit_ratio", value: 0.92, unit: "ratio" },
+    { ts: "16:09", service: "search-api", metric: "cache.hit_ratio", value: 0.14, unit: "ratio" },
+    { ts: "16:08", service: "search-api", metric: "redis.evictions_per_min", value: 8200, unit: "evictions" },
+    { ts: "16:09", service: "search-api", metric: "redis.used_memory_mb", value: 8190, unit: "MB (cap 8192)" },
+    { ts: "16:10", service: "search-api", metric: "es.queries_per_sec", value: 4400, unit: "qps (baseline 750)" },
+    { ts: "16:11", service: "search-api", metric: "es.p99_ms", value: 28000, unit: "ms" },
+  ],
+  "notification-worker": [
+    { ts: "13:24", service: "notification-worker", metric: "slack.delivery_success_rate", value: 0.998, unit: "ratio" },
+    { ts: "13:25", service: "notification-worker", metric: "slack.delivery_success_rate", value: 0.0, unit: "ratio" },
+    { ts: "13:25", service: "notification-worker", metric: "slack.http_status_401_count", value: 47, unit: "responses/min" },
+    { ts: "13:30", service: "notification-worker", metric: "alerts_undelivered_count", value: 1247, unit: "alerts" },
+    { ts: "13:30", service: "notification-worker", metric: "email.delivery_success_rate", value: 0.997, unit: "ratio" },
+    { ts: "13:30", service: "notification-worker", metric: "sms.delivery_success_rate", value: 1.0, unit: "ratio" },
   ],
 };
 
@@ -151,6 +214,35 @@ export const RUNBOOKS: Runbook[] = [
       "Cross-reference incident start time with deploy log (kubectl rollout history)",
       "Compare commit SHA at incident start vs healthy baseline",
       "Consider git revert as fast mitigation",
+    ],
+  },
+  {
+    id: "RB-105",
+    title: "Redis cache eviction storm / stale fallback",
+    symptoms: ["cache.hit_ratio collapse", "redis.evictions_per_min spike", "stale fallback warnings", "backend QPS spike"],
+    diagnosis:
+      "Redis hit its maxmemory cap and started evicting under noeviction policy (silently rejecting writes). Cache stops being refreshed, hit rate collapses, backend gets hammered, and fallback paths serve stale snapshots.",
+    remediation: [
+      "Check Redis INFO memory: used_memory vs maxmemory — usually >95% during eviction storm",
+      "Change eviction policy from noeviction to allkeys-lru as immediate mitigation: CONFIG SET maxmemory-policy allkeys-lru",
+      "Scale Redis memory up (e.g. 8GB → 16GB) — buys breathing room",
+      "Audit: who recently added large keys? Run MEMORY USAGE on top keys via redis-cli --bigkeys",
+      "Long-term: add cache.used_memory_pct alert at 80% with paging at 90%",
+    ],
+  },
+  {
+    id: "RB-106",
+    title: "Third-party API auth token rotation / 401 cascade",
+    symptoms: ["100% delivery failure to one channel", "401 invalid_auth responses", "Other channels unaffected", "Recent token rotation mentioned"],
+    diagnosis:
+      "Outbound integration auth credentials are stale. Slack/SMS/email tokens rotated without updating our secrets store — our worker is still presenting the old token. Single-channel failure pattern + 401 status code strongly indicates auth, not network/quota.",
+    remediation: [
+      "Confirm with channel-owner team that token was rotated (Slack admin audit log)",
+      "Fetch new token from secrets manager (or have admin generate new one and store)",
+      "Update K8s secret: kubectl create secret generic slack-creds --from-literal=token=NEW --dry-run=client -o yaml | kubectl apply -f -",
+      "Restart worker pods to pick up new secret: kubectl rollout restart deploy/notification-worker",
+      "Verify delivery within 60s of restart; backfill missed alerts from queue if applicable",
+      "Post-incident: enable credential-rotation webhook from secrets manager to auto-reload worker",
     ],
   },
 ];
