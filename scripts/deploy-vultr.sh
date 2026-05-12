@@ -11,7 +11,7 @@ fi
 
 VULTR_IP="$1"
 SSH_KEY="${SSH_KEY:-$HOME/.ssh/sentinel_vultr_ed25519}"
-SSH_BASE_OPTS="-o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 -o IdentitiesOnly=yes"
+SSH_BASE_OPTS="-o StrictHostKeyChecking=accept-new -o ConnectTimeout=30 -o IdentitiesOnly=yes -o ServerAliveInterval=15 -o ServerAliveCountMax=4"
 SSH_OPTS="-i ${SSH_KEY} ${SSH_BASE_OPTS}"
 RSYNC_RSH="ssh -i ${SSH_KEY} ${SSH_BASE_OPTS}"
 REMOTE="root@${VULTR_IP}"
