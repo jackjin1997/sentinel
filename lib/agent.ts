@@ -201,9 +201,12 @@ interface StreamingPhaseOpts {
 // Hard cap per phase. Prevents a runaway LLM from ballooning request memory
 // or poisoning downstream phase prompts (each phase's output feeds the next).
 const MAX_PHASE_OUTPUT_CHARS = 200_000;
-// Soft cap on the provider side so the API stops generating instead of us just
-// dropping bytes locally. 8k tokens is ~32KB which is well within the phase
-// system-prompt budget (triage = 3 lines, investigator <250 words, etc.).
+// Soft cap on the provider side so the API stops generating instead of us
+// just dropping bytes locally. 8k tokens (~32KB) per generation step is well
+// above the phase's intended output (triage = 3 lines, investigator
+// <250 words, etc.) but caps any single step's runaway. Note: with tools +
+// stepCountIs(N), total phase output is bounded by N * MAX_PHASE_OUTPUT_TOKENS,
+// and ultimately by MAX_PHASE_OUTPUT_CHARS in the local accumulator.
 const MAX_PHASE_OUTPUT_TOKENS = 8000;
 
 async function runStreamingPhase(opts: StreamingPhaseOpts): Promise<string> {
