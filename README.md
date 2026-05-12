@@ -9,7 +9,7 @@
 [![License](https://img.shields.io/badge/license-MIT-green)](./LICENSE)
 
 
-**🚀 Live demo**: https://tries-virtually-stockings-binary.trycloudflare.com
+**🚀 Live demo**: https://wma-contacting-lindsay-orientation.trycloudflare.com
 
 ---
 

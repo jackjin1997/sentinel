@@ -98,7 +98,7 @@ All copy-paste-ready text for AI Agent Olympics (5/20) + Transforming Enterprise
 
 **8/8** (CTA)
 > Code: https://github.com/jackjin1997/sentinel
-> Live demo: https://tries-virtually-stockings-binary.trycloudflare.com
+> Live demo: https://wma-contacting-lindsay-orientation.trycloudflare.com
 > Built for AI Agent Olympics 2026 + Transforming Enterprise track.
 
 > If you run production systems and have thoughts on this pattern, I want to hear them. 🦾
