@@ -18,14 +18,22 @@ export interface AgentDeps {
 }
 
 const TRIAGE_SYSTEM = `You are Sentinel-Triage, a senior SRE doing first-pass investigation of a production incident.
-Your job: pull JUST enough telemetry to form an initial hypothesis. Be concise. Call tools only when needed.
-Always call queryLogs and queryMetrics at minimum. If a deploy correlation seems plausible, also call checkDeployHistory.
-At the end output a 3-line summary: SYMPTOMS / INITIAL HYPOTHESIS / RECOMMENDED NEXT STEPS.`;
+Your job: pull JUST enough telemetry to form an initial hypothesis. Be CONCISE — judges are watching.
+Call exactly: queryLogs, queryMetrics. Add checkDeployHistory only if deploy correlation is obviously plausible.
+Output strictly 3 short lines:
+SYMPTOMS: <2-sentence summary>
+HYPOTHESIS: <single most likely cause>
+NEXT: <which deep investigation step the Investigator should focus on>`;
 
-const INVESTIGATOR_SYSTEM = `You are Sentinel-Investigator, a principal engineer. You have triage results.
-Your job: form a confident root-cause hypothesis backed by evidence. Use searchRunbook to leverage institutional knowledge.
-Output a JSON-shaped diagnosis with: rootCause, confidence(0-1), evidence[], recommendedActions[], blastRadius.
-Be specific. "DB issue" is not a diagnosis — "long-running query holding 100/100 pool connections after deploy f4e8aa7" is.`;
+const INVESTIGATOR_SYSTEM = `You are Sentinel-Investigator, a principal engineer with triage results in hand.
+Your job: form a confident root-cause diagnosis backed by SPECIFIC evidence. Call searchRunbook once to leverage institutional knowledge.
+Then output a tight diagnosis under 250 words covering:
+- Root cause (1-2 sentences, name specific timestamps/values/commits)
+- Evidence chain (3 bullets max)
+- Confidence (high/medium/low) — be honest, downgrade if uncertain
+- Blast radius
+- Top 3 recommended actions, each with risk/side-effect note
+Be specific. "DB issue" is not a diagnosis — "long-running query (q_9182, 87s) holding 100/100 pool connections" is.`;
 
 const REVIEWER_SYSTEM = `You are Sentinel-Reviewer, a skeptical staff engineer pair-reviewing the diagnosis.
 Your job: stress-test the conclusion. What evidence is missing? What alternative explanations were dismissed too quickly?
@@ -117,8 +125,8 @@ Critique this diagnosis. You're a different vendor's model — your job is to ch
   }
   await deps.emit({ type: "phase-complete", phase: "adversarial-review", summary: reviewText });
 
-  // PHASE 4: CONSOLIDATE (Claude Sonnet — structured JSON synthesis)
-  await deps.emit({ type: "phase", phase: "consolidate", model: "claude-sonnet-4-6" });
+  // PHASE 4: CONSOLIDATE (Claude Haiku — fast structured JSON synthesis)
+  await deps.emit({ type: "phase", phase: "consolidate", model: "claude-haiku-4-5" });
   const consolidatePrompt = `${incidentBrief}
 
 ## Investigator Diagnosis
@@ -136,7 +144,7 @@ Synthesize a final actionable report. Output ONLY valid JSON, nothing else, matc
 }`;
   try {
     const { text } = await generateText({
-      model: anthropic("claude-sonnet-4-6"),
+      model: anthropic("claude-haiku-4-5"),
       prompt: consolidatePrompt,
     });
     const jsonMatch = text.match(/\{[\s\S]*\}/);
