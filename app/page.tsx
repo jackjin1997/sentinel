@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { Incident } from "@/lib/types";
 
 type Phase = "triage" | "investigate" | "adversarial-review" | "consolidate";
@@ -76,13 +76,12 @@ export default function Home() {
       .then((d) => setIncidents(d.incidents));
   }, []);
 
-  useEffect(
-    () => () => {
-      abortRef.current?.abort();
-      readerRef.current?.cancel().catch(() => {});
-    },
-    [],
-  );
+  const cancelInFlight = useCallback(() => {
+    abortRef.current?.abort();
+    readerRef.current?.cancel().catch(() => {});
+  }, []);
+
+  useEffect(() => cancelInFlight, [cancelInFlight]);
 
   useEffect(() => {
     if (!running) return;
@@ -95,9 +94,7 @@ export default function Home() {
   }, [phases, finalReport]);
 
   async function startInvestigation(id: string) {
-    // Cancel any prior run that's somehow still alive before starting a new one.
-    abortRef.current?.abort();
-    readerRef.current?.cancel().catch(() => {});
+    cancelInFlight();
 
     setSelected(id);
     setPhases([]);
@@ -135,17 +132,13 @@ export default function Home() {
     let buf = "";
     let currentPhase: Phase | null = null;
 
-    let cancelled = false;
     while (true) {
       let value: Uint8Array | undefined;
       let done = false;
       try {
         ({ value, done } = await reader.read());
       } catch (err) {
-        if ((err as Error).name === "AbortError" || ac.signal.aborted) {
-          cancelled = true;
-          break;
-        }
+        if (ac.signal.aborted || (err as Error).name === "AbortError") break;
         setErrorMsg((err as Error).message);
         break;
       }
@@ -220,7 +213,7 @@ export default function Home() {
     if (abortRef.current === ac) abortRef.current = null;
     if (readerRef.current === reader) readerRef.current = null;
     setRunning(false);
-    if (!cancelled) setRunFinishedAt(Date.now());
+    if (!ac.signal.aborted) setRunFinishedAt(Date.now());
   }
 
   const elapsedMs = runStartedAt
