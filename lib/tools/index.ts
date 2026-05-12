@@ -29,11 +29,19 @@ export const queryMetrics = tool({
       .string()
       .optional()
       .describe("Specific metric name; omit to get all available metrics for this service"),
+    limit: z
+      .number()
+      .int()
+      .min(1)
+      .max(200)
+      .default(60)
+      .describe("Max points to return (newest first). Bounds tool output so real telemetry doesn't dump unbounded arrays into LLM context."),
   }),
-  execute: async ({ service, metric }) => {
+  execute: async ({ service, metric, limit }) => {
     const points = METRICS_BY_SERVICE[service] ?? [];
     const filtered = metric ? points.filter((p) => p.metric === metric) : points;
-    return { service, count: filtered.length, points: filtered };
+    const sliced = filtered.slice(-limit);
+    return { service, count: sliced.length, totalAvailable: filtered.length, points: sliced };
   },
 });
 
