@@ -1,8 +1,9 @@
 # Sentinel
 
-> **Autonomous Incident Response Agent · multi-vendor LLM orchestration · ~53s MTTR**
+> **Autonomous Incident Response Agent · multi-vendor LLM orchestration · live web data via Bright Data · ~60s MTTR**
 
-[![Hackathon](https://img.shields.io/badge/AI%20Agent%20Olympics-2026-fuchsia)](https://lablab.ai/ai-hackathons/milan-ai-week-hackathon)
+[![Hackathon](https://img.shields.io/badge/Bright%20Data-Web%20Data%20UNLOCKED-1d4ed8)](https://lablab.ai/ai-hackathons/brightdata-ai-agents-web-data-hackathon)
+[![Hackathon](https://img.shields.io/badge/HackerNoon-Proof%20of%20Usefulness-fbbf24)](https://proofofusefulness.com/)
 [![Stack](https://img.shields.io/badge/Next.js-16-black)](https://nextjs.org)
 [![Models](https://img.shields.io/badge/Gemini-2.5--Flash-4285F4)](https://aistudio.google.com)
 [![Models](https://img.shields.io/badge/Claude-Sonnet%204.6-D97757)](https://anthropic.com)
@@ -13,16 +14,28 @@
 
 ---
 
-When your service breaks at 3am, Sentinel investigates, diagnoses, and recommends fixes — like having a senior SRE on call 24/7. It coordinates **four specialized phases across two vendors** so the diagnosis is reviewed by genuinely different model bias before action is taken:
+When your service breaks at 3am, Sentinel investigates, diagnoses, and recommends fixes — like having a senior SRE on call 24/7. It coordinates **four specialized phases across two LLM vendors**, with **live web data fetched via Bright Data** so the agent sees what's broken upstream, not just downstream:
 
 | # | Phase | Model | Role |
 |---|---|---|---|
-| 1 | 🔍 Triage | `gemini-2.5-flash` (Google) | Pull just-enough telemetry, form initial hypothesis |
-| 2 | 🧠 Investigate | `claude-sonnet-4-6` (Anthropic) | Deep root-cause with full tool access |
+| 1 | 🔍 Triage | `gemini-2.5-flash` (Google) | Internal telemetry + **Bright Data scrape of vendor status pages** |
+| 2 | 🧠 Investigate | `claude-sonnet-4-6` (Anthropic) | Deep reasoning + **Bright Data SERP search for public postmortems** + GitHub commit history |
 | 3 | ⚔️ Adversarial review | `gemini-2.5-flash` (Google) | Stress-test Claude's diagnosis with different vendor bias |
 | 4 | 📋 Consolidate | `claude-haiku-4-5` (Anthropic) | Strict-JSON action plan synthesis |
 
-The dashboard streams every phase live — tool calls, reasoning chains, vendor handoffs — so operators see the agent's work, not just its output. Diagnoses cite specific timestamps, metric values, code paths, and runbook IDs. The agent **honestly downgrades confidence** when evidence is uncertain. Graceful Claude Haiku fallback if Gemini hits quota — demo never breaks.
+### Tools (7 total: 4 internal mock + 3 Bright Data live)
+
+| Tool | Source | Purpose |
+|---|---|---|
+| `queryLogs` | internal (mock) | Recent app log lines per service |
+| `queryMetrics` | internal (mock) | Time-series metrics with output bounding |
+| `searchRunbook` | internal (mock) | Org's institutional knowledge library |
+| `checkDeployHistory` | internal (mock) | Recent deploys per service |
+| **`fetchVendorStatus`** | **Bright Data Web Unlocker** | Live scrape of status.stripe.com / githubstatus.com / AWS / Cloudflare / Vercel / OpenAI / Anthropic / Google Cloud |
+| **`searchPublicPostmortems`** | **Bright Data SERP API** | Google search for how other engineers solved similar incidents |
+| **`fetchGithubRecentCommits`** | **Bright Data Web Unlocker** | Pull last N commits from a public GitHub repo to correlate with upstream OSS regressions |
+
+The dashboard streams every phase live — tool calls, reasoning chains, vendor handoffs — so operators see the agent's work, not just its output. Diagnoses cite specific timestamps, metric values, code paths, runbook IDs, AND quoted vendor status excerpts. The agent **honestly downgrades confidence** when evidence is uncertain. Graceful fallback: Claude Haiku if Gemini hits quota, curated mock data if Bright Data is unreachable — demo never breaks.
 
 ## Hackathon submissions
 

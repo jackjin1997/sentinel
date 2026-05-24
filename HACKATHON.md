@@ -1,48 +1,61 @@
 # Sentinel · Hackathon Submission Pack
 
-All copy-paste-ready text for AI Agent Olympics (5/20) + Transforming Enterprise (5/19) submissions.
+All copy-paste-ready text for **Bright Data Web Data UNLOCKED** (Lablab 5/25-5/31, $5k) and **HackerNoon Proof of Usefulness** (until 6/5, $150K+) submissions.
 
 ---
 
 ## Elevator pitch (1 line, 140 char)
 
-> Sentinel is an autonomous incident response agent — three specialized LLMs investigate, diagnose, and recommend fixes for production outages in ~30 seconds.
+> Sentinel is a multi-vendor LLM agent for production incident response — combines INTERNAL telemetry with REAL public web signals via Bright Data.
 
 ## One-paragraph description (≤300 char)
 
-> When a service breaks at 3am, Sentinel dispatches three specialized LLMs in sequence — Gemini Flash triages the alert, Claude Sonnet investigates with full tool access (logs, metrics, runbooks, deploys), Gemini Flash adversarially reviews the diagnosis with a different vendor's bias, and Claude Sonnet consolidates a structured action report. Built on Vercel AI SDK + Next.js, streams every phase live, MTTR ≤ 30s.
+> When production breaks at 3am, Sentinel investigates with both INTERNAL telemetry (logs, metrics, runbooks) AND REAL public web signals via Bright Data (vendor status pages, public postmortems, GitHub commit history) — four LLM phases across two vendors orchestrate the diagnosis in ~60 seconds.
 
 ## Long description (≤1000 char, for submission form)
 
-> Production incident response is the highest-stakes work humans do under time pressure. A single confident-but-wrong LLM is a liability there. Sentinel solves this with **adversarial cross-vendor orchestration**: Gemini-Flash triages telemetry → Claude-Sonnet does deep root-cause reasoning with tools → Gemini-Flash reviews Claude's work with genuinely different vendor bias → Claude-Sonnet consolidates a structured action plan. Each phase streams live to the dashboard — judges see the agents work, not just their output. Diagnoses cite specific timestamps, metric values, code paths, and internal runbooks. The agent **honestly downgrades confidence** when evidence is uncertain. Graceful Claude Haiku fallback ensures the demo never breaks if Gemini hits quota. Stack: Next.js 16 + AI SDK 6 + Zod tools + SSE streaming. Hits Intelligent Reasoning + Agentic Workflows + Collaborative Systems + Enterprise Utility tracks simultaneously.
+> Production incident response is the highest-stakes work humans do under time pressure — and a single confident-but-wrong LLM is a liability. Sentinel solves this with **adversarial cross-vendor orchestration grounded in REAL web data**:
+>
+> 🔍 Gemini-Flash **triages** — internal telemetry + Bright Data scrapes vendor status pages (status.stripe.com, GitHub Status, AWS, Cloudflare) to immediately rule in/out upstream-vendor outages
+> 🧠 Claude-Sonnet **investigates** — deep root-cause reasoning. Calls searchRunbook (internal) + Bright Data SERP to find how others solved similar incidents (public postmortems), and fetchGithubRecentCommits to correlate with upstream OSS regressions
+> ⚔️ Gemini-Flash **adversarially reviews** Claude's work — different vendor, genuinely different bias, catches what Claude missed
+> 📋 Claude-Haiku **consolidates** a strict-JSON action plan
+>
+> Every phase streams live to the dashboard via SSE — operators see the agents WORK, not just their output. Diagnoses cite specific timestamps, metric values, code paths, runbook IDs, AND real vendor status excerpts. Graceful mock fallback if Bright Data quota / Gemini hits a limit — demo never breaks.
+>
+> Stack: Next.js 16 + Vercel AI SDK 6 + Zod tools + SSE streaming + Bright Data Web Unlocker API + SERP API. ~1700 lines of TypeScript.
 
 ---
 
 ## 30-second demo video script
 
-**[0:00-0:03]** Screen: terminal-style dashboard, dark, 5 incident cards on left.
+**[0:00-0:03]** Screen: terminal-style dashboard, dark, 5 incident cards on left. Header shows "🟦 Google · gemini-2.5-flash" and "🟧 Anthropic · claude-sonnet-4-6".
 
-> "Production breaks. You have 30 seconds. Sentinel investigates."
+> "Production breaks. You have 60 seconds. Sentinel investigates."
 
-**[0:03-0:08]** Click `INC-002 auth-service connection pool exhausted` (critical). Phase 1 starts streaming.
+**[0:03-0:08]** Click `INC-001 checkout-api P99 latency spike to 3.2s` (high). Phase 1 starts streaming.
 
-> "Three specialized LLMs across two vendors take it from here."
+> "Triage: Gemini Flash pulls INTERNAL telemetry — logs, metrics — and immediately checks Stripe's REAL status page via Bright Data."
 
-**[0:08-0:15]** Phases 1+2 stream live — Gemini Flash triages, Claude Sonnet investigates. Tool calls appear: `📊 queryMetrics`, `📜 queryLogs`, `📖 searchRunbook`.
+**[0:08-0:15]** Phase 1 tool calls appear: `📊 queryMetrics`, `📜 queryLogs`, **`🌐 fetchVendorStatus`**. Last one expands to show "Stripe: degraded performance, Payment Intents API elevated error rate."
 
-> "Triage, investigate, tool calls — every phase is live."
+> "Real vendor status — not guessed, scraped live. Bright Data Web Unlocker."
 
-**[0:15-0:20]** Phase 3 adversarial-review highlight (orange chip "Anthropic" challenges previous Claude work via different vendor).
+**[0:15-0:25]** Phase 2 — Claude Sonnet investigates. Tool calls: `📖 searchRunbook` (internal) + `🔎 searchPublicPostmortems` (Bright Data SERP). Sample result: "Stripe's circuit breaker pattern — postmortem".
 
-> "Crucially, the reviewer is a different vendor — actually different bias."
+> "Claude searches both our runbook AND the public web for similar postmortems. Different vendor, different bias, full transparency."
 
-**[0:20-0:25]** Final report appears at top: root cause with timestamp, MTTR shown, 5 specific recommendations.
+**[0:25-0:40]** Phase 3 — Gemini Flash adversarially reviews Claude's diagnosis. Phase 4 — Claude Haiku consolidates JSON.
 
-> "Result: precise root cause, confidence honestly calibrated, runnable commands."
+> "Cross-vendor adversarial review catches what single-LLM agents miss."
 
-**[0:25-0:30]** Show MTTR `27.4s` ending shot. Tagline appears: **Sentinel — autonomous SRE, multi-vendor truth.**
+**[0:40-0:55]** Final report appears at top: root cause cites Stripe explicitly, confidence: medium (honest), 3 recommendations with side-effect notes.
 
-> "Half a minute. That's the new MTTR."
+> "Root cause grounded in real vendor data. Confidence honestly calibrated. Three actionable commands."
+
+**[0:55-1:00]** Show MTTR `56s` badge. Tagline: **Sentinel — autonomous SRE, multi-vendor truth, real-web grounding.**
+
+> "Under a minute. Real web data + multi-LLM. That's the new MTTR."
 
 ---
 
@@ -51,57 +64,51 @@ All copy-paste-ready text for AI Agent Olympics (5/20) + Transforming Enterprise
 **1/8** (hook)
 > Built an AI agent that responds to production incidents like a senior SRE.
 
-> When something breaks, it investigates, diagnoses root cause, and writes you a runnable action plan — in ~30 seconds.
+> When something breaks, it investigates, pulls REAL vendor status pages live, diagnoses, and writes you a runnable action plan — in under a minute.
 
 > Here's the trick: it doesn't trust itself. 🧵
 
 **2/8** (the problem)
-> A single LLM in production incident response is dangerous. They produce confident-sounding wrong answers.
+> A single LLM in production incident response is dangerous. They produce confident-sounding wrong answers — sometimes missing obvious upstream-vendor outages because they only see your internal logs.
 
-> Real on-call works in pairs: oncall responds, senior reviews.
+> Real on-call uses both internal signals AND external web data. Senior on top.
 
-> So I built Sentinel with FOUR phases across TWO vendors:
+> So I built Sentinel:
 
-**3/8** (architecture image / diagram)
-> 🔍 Gemini Flash triages: pulls just enough telemetry
-> 🧠 Claude Sonnet investigates: deep root-cause with tools
+**3/8** (architecture)
+> 🔍 Gemini Flash triages: internal telemetry + scrapes vendor status pages live via @bright_data
+> 🧠 Claude Sonnet investigates: searches runbook + public postmortems via BD SERP
 > ⚔️ Gemini Flash adversarially reviews — different vendor, different bias
-> 📋 Claude Sonnet consolidates: strict-JSON action plan
+> 📋 Claude Haiku → strict-JSON action plan
 
-> Each phase = different model, different role.
+**4/8** (Bright Data role)
+> @bright_data Web Unlocker is the secret weapon. Real vendor status pages (Stripe, GitHub, AWS, Cloudflare) become live agent tools. No more "vendor said all green" while their dashboard says fire.
 
-**4/8** (demo gif/video)
-> Live demo: click incident → watch all 4 phases stream in real-time. Tool calls, reasoning chains, final report. ~30 second MTTR.
+> Plus SERP search to find how others solved your exact incident class.
 
-> [embed video/gif]
+**5/8** (demo gif/video)
+> Live demo: click incident → watch all 4 phases stream in real-time. Tool calls, reasoning chains, final report. ~60s MTTR.
 
-**5/8** (diagnosis quality)
-> The agents cite specific timestamps, metric values, code paths, runbook IDs.
+> [embed video]
 
-> When they're unsure, they say "confidence: medium" instead of bluffing.
+**6/8** (diagnosis quality)
+> Agents cite specific timestamps, metric values, code paths, runbook IDs, AND quoted vendor status excerpts.
 
-> Recommendations include side-effect warnings. Sample output ↓
+> When unsure, they say "confidence: medium" instead of bluffing.
 
-> [screenshot of INC-004 final report]
-
-**6/8** (why multi-vendor matters)
-> The adversarial reviewer uses a DIFFERENT VENDOR's model on purpose.
-
-> Same-family models share bias. Different vendors genuinely disagree.
-
-> Gemini routinely catches what Claude missed. And vice versa.
+> [screenshot of final report]
 
 **7/8** (stack)
-> Stack: @nextjs 16, @vercel AI SDK 6, @googleaistudio Gemini, @anthropicai Claude, Zod-typed tools, SSE streaming.
+> Stack: @nextjs 16, @vercel AI SDK 6, @googleaistudio Gemini, @anthropicai Claude, @bright_data Web Unlocker + SERP, Zod tools, SSE streaming.
 
-> Auto-fallback to Claude Haiku if either vendor hits quota. Demo never breaks.
+> Auto-fallback to Claude Haiku + mock data if any vendor hits quota. Demo never breaks.
 
 **8/8** (CTA)
 > Code: https://github.com/jackjin1997/sentinel
 > Live demo: https://wma-contacting-lindsay-orientation.trycloudflare.com
-> Built for AI Agent Olympics 2026 + Transforming Enterprise track.
+> Built for @bright_data x @lablabai Web Data UNLOCKED hackathon + @hackernoon Proof of Usefulness.
 
-> If you run production systems and have thoughts on this pattern, I want to hear them. 🦾
+> If you run production systems, I want your thoughts. 🦾
 
 ---
 
@@ -111,23 +118,27 @@ All copy-paste-ready text for AI Agent Olympics (5/20) + Transforming Enterprise
 `Sentinel`
 
 ### Tagline
-`Autonomous incident response agent · multi-vendor LLM orchestration`
+`Multi-vendor LLM agent for production incident response — internal telemetry meets live web data via Bright Data`
 
-### Track selections
-- AI Agent Olympics: Intelligent Reasoning + Agentic Workflows + Collaborative Systems + Enterprise Utility
-- Transforming Enterprise: Track 2 (AI Agents with Google AI Studio) primary, Track 1 (Agent Security) secondary
+### Track / category — Bright Data Lablab "Web Data UNLOCKED"
+☑️ Most creative use of Bright Data Web Unlocker (vendor status pages as agent tools)
+☑️ Best AI-agent-with-MCP-style architecture (4 LLM phases × 2 vendors × 7 tools)
+
+### Track / category — HackerNoon Proof of Usefulness
+Primary submission angle: **AI + ML category** (sponsor tech usage = bigger prize)
+Story: Real utility — Sentinel turns lengthy on-call investigations into ~60s diagnoses with cited evidence. Built to solve a recurring expensive problem (production incident MTTR), not just a vibe-coded demo.
 
 ### Tech stack
-Next.js 16 · React 19 · TypeScript · Vercel AI SDK · Google Gemini 2.5 Flash · Anthropic Claude Sonnet 4.6 · Zod · Server-Sent Events streaming
+Next.js 16 · React 19 · TypeScript · Vercel AI SDK · Google Gemini 2.5 Flash · Anthropic Claude Sonnet 4.6 / Haiku 4.5 · **Bright Data Web Unlocker + SERP API** · Zod · Server-Sent Events streaming · Cloudflare Tunnel · Vultr
 
 ### What problem does it solve?
-Production incident response is high-stakes work under time pressure where confident-but-wrong LLMs are dangerous. Sentinel runs adversarial cross-vendor orchestration so the diagnosis is reviewed by a genuinely different model bias before action is recommended.
+Production incident response is time-pressured high-stakes work where a single confidently-wrong LLM is dangerous, AND where the root cause is often outside your own infrastructure (upstream vendor outage). Sentinel solves both: adversarial cross-vendor LLM review prevents single-model blindspots, and Bright Data integration gives the agent live access to public web signals (vendor status pages, postmortem archives, GitHub) so it can see what's broken UPSTREAM, not just downstream.
 
 ### How is it different from existing solutions?
-DataDog / PagerDuty AI features use single-vendor pipelines. Sentinel deliberately uses TWO vendors (Google + Anthropic) so the reviewer phase has structurally different bias. The phase trace is fully observable — operators see the reasoning, not just the output. Open source.
+DataDog / PagerDuty AI features are single-vendor LLM pipelines confined to internal observability data. Sentinel deliberately uses TWO LLM vendors (Google + Anthropic) for adversarial review + REAL public web data via Bright Data (vendor status, postmortems, GitHub). Operators see the full reasoning trace including which signal came from which source. Open source under MIT.
 
 ### What was built during the hackathon?
-The entire system — agent orchestration, tool definitions, streaming API, dashboard UI, 5 realistic incident scenarios, 6 runbooks, multi-vendor fallback. ~1500 lines of TypeScript, end-to-end working with sub-30s MTTR.
+The entire system — 7 agent tools (4 internal mock + 3 Bright Data live), multi-vendor LLM orchestration with graceful fallback, streaming dashboard UI, 5 realistic incident scenarios with 6 runbooks, all glued by Vercel AI SDK 6. ~1700 lines of TypeScript. End-to-end working with sub-60s MTTR. Deployed on Vultr behind Cloudflare Tunnel.
 
 ---
 
@@ -135,13 +146,12 @@ The entire system — agent orchestration, tool definitions, streaming API, dash
 
 - **OnCall** — name it for the role it replaces
 - **Triage** — names the first phase
-- **Stethoscope** — diagnostic instrument metaphor
 - **Sevhound** — chases SEV-1s
-- **Bridgekeeper** — gatekeeps the incident bridge
+- **Web-Aware** — emphasizes the BD live-web differentiator
 
 ## Open questions for user / decisions
 
-- [ ] Should the demo video have voice-over or text-only overlay?
-- [ ] Do we open-source code under MIT (default) or AGPL?
-- [ ] Do we attempt Vultr deploy for the Vultr Enterprise Agent award ($500-2000 partner award)?
-- [ ] X thread: post from @jackjin1997 personal or create a fresh project account?
+- [ ] Demo video: voice-over or text-only overlay?
+- [ ] OSS license MIT (default) or AGPL?
+- [ ] X thread: post from @jackjin1997 personal or fresh project account?
+- [ ] HackerNoon submission — submit a separate article on hackernoon.com explaining the architecture? (helps the "proof of usefulness" framing)
