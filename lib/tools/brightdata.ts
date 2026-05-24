@@ -162,10 +162,16 @@ export const fetchGithubRecentCommits = tool({
   description:
     "Fetch recent commits to a public GitHub repository via Bright Data, scoped to the last 24-48h. Use to correlate an incident with upstream open-source library / framework releases that may have broken something downstream.",
   inputSchema: z.object({
-    repo: z.string().regex(/^[\w-]+\/[\w-.]+$/, "Format: owner/name").describe("Public GitHub repo, e.g. 'vercel/next.js'"),
+    // Regex constraints are passed as JSON Schema `pattern` and some LLM
+    // providers (Anthropic) reject patterns that aren't compatible with their
+    // strict draft 2020-12 validator. Validate at runtime instead.
+    repo: z.string().describe("Public GitHub repo in 'owner/name' format, e.g. 'vercel/next.js'"),
     limit: z.number().int().min(1).max(10).default(5),
   }),
   execute: async ({ repo, limit }) => {
+    if (!/^[\w-]+\/[\w-.]+$/.test(repo)) {
+      return { source: "validation-error", error: `invalid repo '${repo}', expected owner/name format`, commits: [] };
+    }
     try {
       const url = `https://api.github.com/repos/${repo}/commits?per_page=${limit}`;
       const raw = await bdFetch({ url, format: "raw" }, 8000);
