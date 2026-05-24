@@ -93,11 +93,19 @@ export const checkDeployHistory = tool({
   },
 });
 
+import { brightDataTools } from "./brightdata";
+
+// Tools the agent can call. Mixed by design:
+//   - 4 INTERNAL telemetry tools (mock here, would be Datadog/Grafana in prod)
+//   - 3 EXTERNAL web-data tools via Bright Data (real status pages, postmortems, GitHub)
+// The combination is the core story: internal signals diagnose WHAT broke,
+// external signals reveal WHY (vendor outage? known issue? upstream regression?).
 export const tools = {
   queryLogs,
   queryMetrics,
   searchRunbook,
   checkDeployHistory,
+  ...brightDataTools,
 };
 
 export type SentinelToolName = keyof typeof tools;
