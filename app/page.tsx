@@ -41,7 +41,14 @@ const TOOL_ICON: Record<string, string> = {
   queryMetrics: "📊",
   searchRunbook: "📖",
   checkDeployHistory: "🚀",
+  fetchVendorStatus: "🌐",
+  searchPublicPostmortems: "🔎",
+  fetchGithubRecentCommits: "🐙",
 };
+
+// Bright Data tools — get a small "BD" badge in the tool call header so judges
+// (and operators) see which signals are live external web data vs internal mock.
+const BD_TOOLS = new Set(["fetchVendorStatus", "searchPublicPostmortems", "fetchGithubRecentCommits"]);
 
 function vendorChip(model: string) {
   if (model.startsWith("gemini")) {
@@ -396,23 +403,53 @@ export default function Home() {
                       {/* TOOL CALLS */}
                       {ph.toolCalls.length > 0 && (
                         <div className="space-y-1.5">
-                          {ph.toolCalls.map((tc, j) => (
-                            <details key={j} className="border-l-2 border-zinc-700 pl-3 text-xs">
-                              <summary className="cursor-pointer text-zinc-300 hover:text-zinc-100">
-                                <span className="mr-1">{TOOL_ICON[tc.name] ?? "🔧"}</span>
-                                <span className="text-yellow-300 font-semibold">{tc.name}</span>
-                                <span className="text-zinc-500 ml-2">
-                                  ({Object.entries(tc.args as Record<string, unknown>)
-                                    .map(([k, v]) => `${k}=${typeof v === "object" ? JSON.stringify(v) : v}`)
-                                    .join(", ")})
-                                </span>
-                                {tc.result !== undefined && <span className="text-emerald-500 ml-2">✓</span>}
-                              </summary>
-                              <pre className="mt-2 p-2 rounded bg-zinc-900 text-zinc-400 overflow-x-auto whitespace-pre-wrap max-h-56 overflow-y-auto text-[11px] leading-tight">
-                                {JSON.stringify(tc.result ?? "(awaiting result...)", null, 2)}
-                              </pre>
-                            </details>
-                          ))}
+                          {ph.toolCalls.map((tc, j) => {
+                            const isBD = BD_TOOLS.has(tc.name);
+                            // After tool returns, inspect result.source to label live vs mock
+                            const resultSource =
+                              tc.result && typeof tc.result === "object" && tc.result !== null
+                                ? (tc.result as { source?: string }).source
+                                : undefined;
+                            const isLive = resultSource?.startsWith("brightdata");
+                            const isMock = resultSource === "mock-fallback";
+                            return (
+                              <details
+                                key={j}
+                                className={`border-l-2 pl-3 text-xs ${
+                                  isBD ? "border-blue-500/60" : "border-zinc-700"
+                                }`}
+                              >
+                                <summary className="cursor-pointer text-zinc-300 hover:text-zinc-100">
+                                  <span className="mr-1">{TOOL_ICON[tc.name] ?? "🔧"}</span>
+                                  <span className="text-yellow-300 font-semibold">{tc.name}</span>
+                                  {isBD && (
+                                    <span className="ml-2 px-1.5 py-0.5 rounded text-[10px] font-bold tracking-wider border border-blue-500/40 bg-blue-500/10 text-blue-300">
+                                      BD
+                                    </span>
+                                  )}
+                                  {isLive && (
+                                    <span className="ml-1 px-1.5 py-0.5 rounded text-[10px] font-bold tracking-wider border border-emerald-500/40 bg-emerald-500/10 text-emerald-300">
+                                      LIVE
+                                    </span>
+                                  )}
+                                  {isMock && (
+                                    <span className="ml-1 px-1.5 py-0.5 rounded text-[10px] font-bold tracking-wider border border-zinc-600 bg-zinc-800 text-zinc-400">
+                                      mock
+                                    </span>
+                                  )}
+                                  <span className="text-zinc-500 ml-2">
+                                    ({Object.entries(tc.args as Record<string, unknown>)
+                                      .map(([k, v]) => `${k}=${typeof v === "object" ? JSON.stringify(v) : v}`)
+                                      .join(", ")})
+                                  </span>
+                                  {tc.result !== undefined && <span className="text-emerald-500 ml-2">✓</span>}
+                                </summary>
+                                <pre className="mt-2 p-2 rounded bg-zinc-900 text-zinc-400 overflow-x-auto whitespace-pre-wrap max-h-56 overflow-y-auto text-[11px] leading-tight">
+                                  {JSON.stringify(tc.result ?? "(awaiting result...)", null, 2)}
+                                </pre>
+                              </details>
+                            );
+                          })}
                         </div>
                       )}
                       {/* TEXT */}
