@@ -2,11 +2,11 @@
 
 > **Autonomous Incident Response Agent · multi-vendor LLM orchestration · live web data via Bright Data · ~60s MTTR**
 
-[![Hackathon](https://img.shields.io/badge/Bright%20Data-Web%20Data%20UNLOCKED-1d4ed8)](https://lablab.ai/ai-hackathons/brightdata-ai-agents-web-data-hackathon)
-[![Hackathon](https://img.shields.io/badge/HackerNoon-Proof%20of%20Usefulness-fbbf24)](https://proofofusefulness.com/)
+[![Hackathon](https://img.shields.io/badge/Qwen%20Cloud-Global%20AI%20Hackathon-722ed1)](https://qwencloud-hackathon.devpost.com/)
 [![Stack](https://img.shields.io/badge/Next.js-16-black)](https://nextjs.org)
-[![Models](https://img.shields.io/badge/Gemini-2.5--Flash-4285F4)](https://aistudio.google.com)
+[![Models](https://img.shields.io/badge/Qwen-Max-722ed1)](https://bailian.console.alibabacloud.com/)
 [![Models](https://img.shields.io/badge/Claude-Sonnet%204.6-D97757)](https://anthropic.com)
+[![Models](https://img.shields.io/badge/Gemini-2.5--Flash-4285F4)](https://aistudio.google.com)
 [![License](https://img.shields.io/badge/license-MIT-green)](./LICENSE)
 
 
@@ -14,7 +14,7 @@
 
 ---
 
-When your service breaks at 3am, Sentinel investigates, diagnoses, and recommends fixes — like having a senior SRE on call 24/7. It coordinates **four specialized phases across two LLM vendors**, with **live web data fetched via Bright Data** so the agent sees what's broken upstream, not just downstream:
+When your service breaks at 3am, Sentinel investigates, diagnoses, and recommends fixes — like having a senior SRE on call 24/7. It coordinates **four specialized phases across three LLM vendors**, with **live web data fetched via Bright Data** so the agent sees what's broken upstream, not just downstream:
 
 | # | Phase | Model (env-driven) | Role |
 |---|---|---|---|
@@ -39,19 +39,23 @@ The dashboard streams every phase live — tool calls, reasoning chains, vendor 
 
 ## Hackathon submissions
 
-Built for:
-- [AI Agent Olympics Hackathon](https://lablab.ai/ai-hackathons/milan-ai-week-hackathon) (Milan AI Week, $28k pool)
-- [Transforming Enterprise Through AI](https://lablab.ai/ai-hackathons/techex-intelligent-enterprise-solutions-hackathon) ($10k pool)
+**Currently submitted to:**
+- [Qwen Cloud Global AI Hackathon](https://qwencloud-hackathon.devpost.com/) — deadline 2026-07-09, $7K cash + $3K cloud credit per track. Sentinel runs Qwen-max as Phase 1 triage primary via DashScope OpenAI-compatible endpoint.
 
-Tracks targeted: Intelligent Reasoning · Agentic Workflows · Collaborative Systems · Enterprise Utility · Vultr Enterprise Agent · Google AI Studio.
+**Previously targeted (deadlines passed):** AI Agent Olympics (Milan AI Week, $28k), Transforming Enterprise Through AI ($10k), Bright Data Web Data UNLOCKED ($5k), HackerNoon Proof of Usefulness ($150k pool).
+
+**Tracks emphasized:** Multi-Vendor Orchestration · Agentic Workflows · Real-World Web Grounding · Honest Confidence Calibration · Graceful Degradation as Architecture.
 
 ## Local dev
 
 ```bash
 cp .env.local.example .env.local
-# Fill in:
-#   GOOGLE_GENERATIVE_AI_API_KEY=  (https://aistudio.google.com/apikey — free tier ample)
+# Fill in (defaults expect all three for full 3-vendor demo):
+#   QWEN_API_KEY=                  (https://bailian.console.alibabacloud.com/ — Alibaba account, mainland endpoint)
 #   ANTHROPIC_API_KEY=             (https://console.anthropic.com — paid, $5 free trial)
+#   GOOGLE_GENERATIVE_AI_API_KEY=  (https://aistudio.google.com/apikey — free tier ample)
+# Optional but recommended for live web data:
+#   BRIGHT_DATA_API_KEY=           (https://brightdata.com/cp/api_settings — without, tools fall back to mock)
 bun install
 bun dev
 # Open http://localhost:3000

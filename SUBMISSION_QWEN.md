@@ -102,9 +102,10 @@ Sentinel takes a production incident (P99 latency spike, error budget burn, etc.
 - Bun (package manager + runtime)
 
 ### Try it
-- Live demo: <TBD — set after deploy>
+- Live demo: https://wma-contacting-lindsay-orientation.trycloudflare.com (verified 2026-06-12 · Phase 1 SSE event confirms `model: qwen-max`)
 - Repo: https://github.com/jackjin1997/sentinel (MIT)
-- 60s demo video: <TBD — link after upload>
+- SSE evidence: `docs/demo-evidence/INC-001-qwen.sse` (249 lines, full 4-phase stream)
+- 60s demo video: <TBD — link after upload to GitHub Release>
 
 ---
 
