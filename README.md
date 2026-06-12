@@ -18,7 +18,7 @@ When your service breaks at 3am, Sentinel investigates, diagnoses, and recommend
 
 | # | Phase | Model | Role |
 |---|---|---|---|
-| 1 | 🔍 Triage | `gemini-2.5-flash` (Google) | Internal telemetry + **Bright Data scrape of vendor status pages** |
+| 1 | 🔍 Triage | `qwen-max` (Qwen primary) → `claude-haiku-4-5` (fallback) → `gemini-2.5-flash` (fallback) | Internal telemetry + **Bright Data scrape of vendor status pages** |
 | 2 | 🧠 Investigate | `claude-sonnet-4-6` (Anthropic) | Deep reasoning + **Bright Data SERP search for public postmortems** + GitHub commit history |
 | 3 | ⚔️ Adversarial review | `gemini-2.5-flash` (Google) | Stress-test Claude's diagnosis with different vendor bias |
 | 4 | 📋 Consolidate | `claude-haiku-4-5` (Anthropic) | Strict-JSON action plan synthesis |
@@ -67,7 +67,7 @@ Click any incident card → watch the agents work.
 │  (Next.js 16)   │         │                                            │
 └─────────────────┘         │   runIncidentAgent (lib/agent.ts)          │
                             │                                            │
-                            │   PHASE 1 · gemini-2.5-flash · triage      │
+                            │   PHASE 1 · qwen-max (→haiku→gemini) · triage│
                             │     ├─ queryLogs                           │
                             │     ├─ queryMetrics                        │
                             │     └─ checkDeployHistory                  │

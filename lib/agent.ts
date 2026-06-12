@@ -1,5 +1,6 @@
 import { google } from "@ai-sdk/google";
 import { anthropic } from "@ai-sdk/anthropic";
+import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { generateText, streamText, stepCountIs } from "ai";
 import { tools } from "./tools";
 import { INCIDENTS } from "./mock/incidents";
@@ -63,10 +64,17 @@ export async function runIncidentAgent(incidentId: string, deps: AgentDeps): Pro
 - Symptoms:
 ${incident.symptoms.map((s) => `  - ${s}`).join("\n")}`;
 
-  // PHASE 1: TRIAGE (Gemini Flash with Claude Haiku fallback)
-  await deps.emit({ type: "phase", phase: "triage", model: "gemini-2.5-flash" });
+  // PHASE 1: TRIAGE — Qwen-max primary → Claude Haiku fallback → Gemini Flash second fallback
+  // Strategy: @ai-sdk/openai-compatible pointing at DashScope OpenAI-compat endpoint (no official @ai-sdk/qwen exists)
+  const dashscope = createOpenAICompatible({
+    name: "dashscope",
+    baseURL: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    apiKey: process.env.QWEN_API_KEY ?? "",
+  });
+  const qwenModel = process.env.QWEN_MODEL ?? "qwen-max";
+  await deps.emit({ type: "phase", phase: "triage", model: qwenModel });
   let triageText = await runStreamingPhase({
-    model: google("gemini-2.5-flash"),
+    model: dashscope(qwenModel),
     system: TRIAGE_SYSTEM,
     prompt: incidentBrief,
     useTools: true,
@@ -76,10 +84,24 @@ ${incident.symptoms.map((s) => `  - ${s}`).join("\n")}`;
   });
   if (deps.signal?.aborted) return;
   if (!triageText.trim()) {
-    // Gemini failed — fallback to Claude Haiku so demo never breaks
+    // Qwen failed — fallback to Claude Haiku
     await deps.emit({ type: "phase", phase: "triage", model: "claude-haiku-4-5 (fallback)" });
     triageText = await runStreamingPhase({
       model: anthropic("claude-haiku-4-5"),
+      system: TRIAGE_SYSTEM,
+      prompt: incidentBrief,
+      useTools: true,
+      maxSteps: 6,
+      emit: deps.emit,
+      signal: deps.signal,
+    });
+    if (deps.signal?.aborted) return;
+  }
+  if (!triageText.trim()) {
+    // Haiku also failed — second fallback to Gemini Flash so demo never breaks
+    await deps.emit({ type: "phase", phase: "triage", model: "gemini-2.5-flash (fallback)" });
+    triageText = await runStreamingPhase({
+      model: google("gemini-2.5-flash"),
       system: TRIAGE_SYSTEM,
       prompt: incidentBrief,
       useTools: true,
