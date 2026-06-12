@@ -1,6 +1,7 @@
 import { google } from "@ai-sdk/google";
 import { anthropic } from "@ai-sdk/anthropic";
-import { generateText, streamText, stepCountIs } from "ai";
+import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
+import { generateText, streamText, stepCountIs, type LanguageModel } from "ai";
 import { tools } from "./tools";
 import { INCIDENTS } from "./mock/incidents";
 
@@ -17,6 +18,59 @@ export interface AgentDeps {
   emit: (e: AgentEvent) => void | Promise<void>;
   signal?: AbortSignal;
 }
+
+// ---------------------------------------------------------------------------
+// resolveModel — maps a model spec string to a Vercel AI SDK LanguageModel.
+// Supported spec formats:
+//   qwen-max | qwen-plus | qwen-turbo     → DashScope via @ai-sdk/openai-compatible
+//   claude-sonnet-4-6 | claude-haiku-4-5  → @ai-sdk/anthropic
+//   gemini-2.5-flash  | gemini-2.5-pro    → @ai-sdk/google
+// Unknown spec → throws with the unrecognised spec name.
+// ---------------------------------------------------------------------------
+
+let _dashscope: ReturnType<typeof createOpenAICompatible> | null = null;
+function getDashscope() {
+  if (!_dashscope) {
+    _dashscope = createOpenAICompatible({
+      name: "dashscope",
+      baseURL: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+      apiKey: process.env.QWEN_API_KEY ?? "",
+    });
+  }
+  return _dashscope;
+}
+
+function resolveModel(spec: string): LanguageModel {
+  if (spec === "qwen-max" || spec === "qwen-plus" || spec === "qwen-turbo") {
+    return getDashscope()(spec);
+  }
+  if (spec === "claude-sonnet-4-6" || spec === "claude-haiku-4-5") {
+    return anthropic(spec);
+  }
+  if (spec === "gemini-2.5-flash" || spec === "gemini-2.5-pro") {
+    return google(spec);
+  }
+  throw new Error(
+    `resolveModel: unknown model spec "${spec}" — supported: qwen-max, qwen-plus, qwen-turbo, claude-sonnet-4-6, claude-haiku-4-5, gemini-2.5-flash, gemini-2.5-pro`
+  );
+}
+
+// ---------------------------------------------------------------------------
+// parseChain — reads a comma-separated PHASEN_CHAIN env var, trims whitespace.
+// Falls back to provided default string if the env var is absent or empty.
+// ---------------------------------------------------------------------------
+function parseChain(envVar: string, defaultValue: string): string[] {
+  const raw = process.env[envVar];
+  const src = raw?.trim() ? raw : defaultValue;
+  return src.split(",").map((s) => s.trim()).filter(Boolean);
+}
+
+// Phase-level chain defaults — match the pre-refactor hardcoded models exactly
+// so that deployments with no PHASEN_CHAIN env vars reproduce prior behaviour.
+const DEFAULT_PHASE1_CHAIN = "qwen-max,claude-haiku-4-5,gemini-2.5-flash";
+const DEFAULT_PHASE2_CHAIN = "claude-sonnet-4-6";
+const DEFAULT_PHASE3_CHAIN = "gemini-2.5-flash";
+const DEFAULT_PHASE4_CHAIN = "claude-haiku-4-5";
 
 const TRIAGE_SYSTEM = `You are Sentinel-Triage, a senior SRE doing first-pass investigation of a production incident.
 Your job: pull JUST enough telemetry to form an initial hypothesis. Be CONCISE — judges are watching.
@@ -48,6 +102,54 @@ Your job: stress-test the conclusion. What evidence is missing? What alternative
 What's the risk of the recommended remediation? Output a short critique (3-5 bullets) and a verdict: AGREE / CHALLENGE / NEED_MORE_DATA.
 Be useful — not pedantic. Catch the things that matter.`;
 
+// ---------------------------------------------------------------------------
+// runPhaseChain — cascading retry across a model chain.
+// Attempts each model in order; if a model returns empty text, falls through
+// to the next. Emits a "phase" event for each attempt, annotating "(fallback)"
+// for models beyond index 0. Returns the first non-empty result, or "" if all
+// models in the chain failed.
+// ---------------------------------------------------------------------------
+
+interface PhaseChainOpts {
+  phaseName: "triage" | "investigate" | "adversarial-review" | "consolidate";
+  chain: string[];
+  system: string;
+  prompt: string;
+  useTools: boolean;
+  maxSteps: number;
+  emit: (e: AgentEvent) => void | Promise<void>;
+  signal?: AbortSignal;
+}
+
+async function runPhaseChain(opts: PhaseChainOpts): Promise<string> {
+  for (let i = 0; i < opts.chain.length; i++) {
+    if (opts.signal?.aborted) return "";
+    const spec = opts.chain[i];
+    const label = i === 0 ? spec : `${spec} (fallback)`;
+    await opts.emit({ type: "phase", phase: opts.phaseName, model: label });
+    let model: LanguageModel;
+    try {
+      model = resolveModel(spec);
+    } catch (err) {
+      await opts.emit({ type: "error", message: (err as Error).message });
+      continue;
+    }
+    const result = await runStreamingPhase({
+      model,
+      system: opts.system,
+      prompt: opts.prompt,
+      useTools: opts.useTools,
+      maxSteps: opts.maxSteps,
+      emit: opts.emit,
+      signal: opts.signal,
+    });
+    if (opts.signal?.aborted) return result;
+    if (result.trim()) return result;
+    // Empty result — try next model in chain
+  }
+  return "";
+}
+
 export async function runIncidentAgent(incidentId: string, deps: AgentDeps): Promise<void> {
   const incident = INCIDENTS.find((i) => i.id === incidentId);
   if (!incident) {
@@ -63,10 +165,16 @@ export async function runIncidentAgent(incidentId: string, deps: AgentDeps): Pro
 - Symptoms:
 ${incident.symptoms.map((s) => `  - ${s}`).join("\n")}`;
 
-  // PHASE 1: TRIAGE (Gemini Flash with Claude Haiku fallback)
-  await deps.emit({ type: "phase", phase: "triage", model: "gemini-2.5-flash" });
-  let triageText = await runStreamingPhase({
-    model: google("gemini-2.5-flash"),
+  // Resolve chains from env (with defaults that reproduce pre-refactor behaviour)
+  const phase1Chain = parseChain("PHASE1_CHAIN", DEFAULT_PHASE1_CHAIN);
+  const phase2Chain = parseChain("PHASE2_CHAIN", DEFAULT_PHASE2_CHAIN);
+  const phase3Chain = parseChain("PHASE3_CHAIN", DEFAULT_PHASE3_CHAIN);
+  const phase4Chain = parseChain("PHASE4_CHAIN", DEFAULT_PHASE4_CHAIN);
+
+  // PHASE 1: TRIAGE
+  const triageText = await runPhaseChain({
+    phaseName: "triage",
+    chain: phase1Chain,
     system: TRIAGE_SYSTEM,
     prompt: incidentBrief,
     useTools: true,
@@ -75,33 +183,19 @@ ${incident.symptoms.map((s) => `  - ${s}`).join("\n")}`;
     signal: deps.signal,
   });
   if (deps.signal?.aborted) return;
-  if (!triageText.trim()) {
-    // Gemini failed — fallback to Claude Haiku so demo never breaks
-    await deps.emit({ type: "phase", phase: "triage", model: "claude-haiku-4-5 (fallback)" });
-    triageText = await runStreamingPhase({
-      model: anthropic("claude-haiku-4-5"),
-      system: TRIAGE_SYSTEM,
-      prompt: incidentBrief,
-      useTools: true,
-      maxSteps: 6,
-      emit: deps.emit,
-      signal: deps.signal,
-    });
-    if (deps.signal?.aborted) return;
-  }
   await deps.emit({ type: "phase-complete", phase: "triage", summary: triageText });
 
-  // PHASE 2: DEEP INVESTIGATION (Claude Sonnet — heaviest reasoning, different vendor)
+  // PHASE 2: DEEP INVESTIGATION
   if (deps.signal?.aborted) return;
-  await deps.emit({ type: "phase", phase: "investigate", model: "claude-sonnet-4-6" });
   const investigatorPrompt = `${incidentBrief}
 
-## Triage Summary (from gemini-2.5-flash)
+## Triage Summary (from ${phase1Chain[0]})
 ${triageText}
 
 Now form your principal-engineer diagnosis. Use searchRunbook to find matching institutional knowledge before concluding.`;
-  const diagnosisText = await runStreamingPhase({
-    model: anthropic("claude-sonnet-4-6"),
+  const diagnosisText = await runPhaseChain({
+    phaseName: "investigate",
+    chain: phase2Chain,
     system: INVESTIGATOR_SYSTEM,
     prompt: investigatorPrompt,
     useTools: true,
@@ -112,17 +206,17 @@ Now form your principal-engineer diagnosis. Use searchRunbook to find matching i
   if (deps.signal?.aborted) return;
   await deps.emit({ type: "phase-complete", phase: "investigate", summary: diagnosisText });
 
-  // PHASE 3: ADVERSARIAL REVIEW (Gemini Flash with Claude Haiku fallback)
+  // PHASE 3: ADVERSARIAL REVIEW
   if (deps.signal?.aborted) return;
-  await deps.emit({ type: "phase", phase: "adversarial-review", model: "gemini-2.5-flash" });
   const reviewerPrompt = `${incidentBrief}
 
-## Investigator Diagnosis (from claude-sonnet-4-6)
+## Investigator Diagnosis (from ${phase2Chain[0]})
 ${diagnosisText}
 
-Critique this diagnosis. You're a different vendor's model — your job is to challenge Claude's conclusions with fresh eyes.`;
-  let reviewText = await runStreamingPhase({
-    model: google("gemini-2.5-flash"),
+Critique this diagnosis. You're a different vendor's model — your job is to challenge the conclusions with fresh eyes.`;
+  const reviewText = await runPhaseChain({
+    phaseName: "adversarial-review",
+    chain: phase3Chain,
     system: REVIEWER_SYSTEM,
     prompt: reviewerPrompt,
     useTools: false,
@@ -131,24 +225,11 @@ Critique this diagnosis. You're a different vendor's model — your job is to ch
     signal: deps.signal,
   });
   if (deps.signal?.aborted) return;
-  if (!reviewText.trim()) {
-    await deps.emit({ type: "phase", phase: "adversarial-review", model: "claude-haiku-4-5 (fallback)" });
-    reviewText = await runStreamingPhase({
-      model: anthropic("claude-haiku-4-5"),
-      system: REVIEWER_SYSTEM,
-      prompt: reviewerPrompt,
-      useTools: false,
-      maxSteps: 1,
-      emit: deps.emit,
-      signal: deps.signal,
-    });
-    if (deps.signal?.aborted) return;
-  }
   await deps.emit({ type: "phase-complete", phase: "adversarial-review", summary: reviewText });
 
-  // PHASE 4: CONSOLIDATE (Claude Haiku — fast structured JSON synthesis)
+  // PHASE 4: CONSOLIDATE (uses generateText — not streaming)
   if (deps.signal?.aborted) return;
-  await deps.emit({ type: "phase", phase: "consolidate", model: "claude-haiku-4-5" });
+  await deps.emit({ type: "phase", phase: "consolidate", model: phase4Chain[0] });
   const consolidatePrompt = `${incidentBrief}
 
 ## Investigator Diagnosis
@@ -165,8 +246,15 @@ Synthesize a final actionable report. Output ONLY valid JSON, nothing else, matc
   "openQuestions": ["q1", "q2"]
 }`;
   try {
+    let consolidateModel: LanguageModel;
+    try {
+      consolidateModel = resolveModel(phase4Chain[0]);
+    } catch (err) {
+      await deps.emit({ type: "error", message: `Consolidation model error: ${(err as Error).message}` });
+      return;
+    }
     const { text } = await generateText({
-      model: anthropic("claude-haiku-4-5"),
+      model: consolidateModel,
       prompt: consolidatePrompt,
       abortSignal: deps.signal,
       // Bounded — consolidate output is a small JSON object. Without this, a

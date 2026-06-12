@@ -2,11 +2,11 @@
 
 > **Autonomous Incident Response Agent · multi-vendor LLM orchestration · live web data via Bright Data · ~60s MTTR**
 
-[![Hackathon](https://img.shields.io/badge/Bright%20Data-Web%20Data%20UNLOCKED-1d4ed8)](https://lablab.ai/ai-hackathons/brightdata-ai-agents-web-data-hackathon)
-[![Hackathon](https://img.shields.io/badge/HackerNoon-Proof%20of%20Usefulness-fbbf24)](https://proofofusefulness.com/)
+[![Hackathon](https://img.shields.io/badge/Qwen%20Cloud-Global%20AI%20Hackathon-722ed1)](https://qwencloud-hackathon.devpost.com/)
 [![Stack](https://img.shields.io/badge/Next.js-16-black)](https://nextjs.org)
-[![Models](https://img.shields.io/badge/Gemini-2.5--Flash-4285F4)](https://aistudio.google.com)
+[![Models](https://img.shields.io/badge/Qwen-Max-722ed1)](https://bailian.console.alibabacloud.com/)
 [![Models](https://img.shields.io/badge/Claude-Sonnet%204.6-D97757)](https://anthropic.com)
+[![Models](https://img.shields.io/badge/Gemini-2.5--Flash-4285F4)](https://aistudio.google.com)
 [![License](https://img.shields.io/badge/license-MIT-green)](./LICENSE)
 
 
@@ -14,14 +14,14 @@
 
 ---
 
-When your service breaks at 3am, Sentinel investigates, diagnoses, and recommends fixes — like having a senior SRE on call 24/7. It coordinates **four specialized phases across two LLM vendors**, with **live web data fetched via Bright Data** so the agent sees what's broken upstream, not just downstream:
+When your service breaks at 3am, Sentinel investigates, diagnoses, and recommends fixes — like having a senior SRE on call 24/7. It coordinates **four specialized phases across three LLM vendors**, with **live web data fetched via Bright Data** so the agent sees what's broken upstream, not just downstream:
 
-| # | Phase | Model | Role |
+| # | Phase | Model (env-driven) | Role |
 |---|---|---|---|
-| 1 | 🔍 Triage | `gemini-2.5-flash` (Google) | Internal telemetry + **Bright Data scrape of vendor status pages** |
-| 2 | 🧠 Investigate | `claude-sonnet-4-6` (Anthropic) | Deep reasoning + **Bright Data SERP search for public postmortems** + GitHub commit history |
-| 3 | ⚔️ Adversarial review | `gemini-2.5-flash` (Google) | Stress-test Claude's diagnosis with different vendor bias |
-| 4 | 📋 Consolidate | `claude-haiku-4-5` (Anthropic) | Strict-JSON action plan synthesis |
+| 1 | 🔍 Triage | `PHASE1_CHAIN` — default: `qwen-max` → `claude-haiku-4-5` → `gemini-2.5-flash` | Internal telemetry + **Bright Data scrape of vendor status pages** |
+| 2 | 🧠 Investigate | `PHASE2_CHAIN` — default: `claude-sonnet-4-6` | Deep reasoning + **Bright Data SERP search for public postmortems** + GitHub commit history |
+| 3 | ⚔️ Adversarial review | `PHASE3_CHAIN` — default: `gemini-2.5-flash` | Stress-test the investigation with a structurally different vendor |
+| 4 | 📋 Consolidate | `PHASE4_CHAIN` — default: `claude-haiku-4-5` | Strict-JSON action plan synthesis |
 
 ### Tools (7 total: 4 internal mock + 3 Bright Data live)
 
@@ -39,19 +39,23 @@ The dashboard streams every phase live — tool calls, reasoning chains, vendor 
 
 ## Hackathon submissions
 
-Built for:
-- [AI Agent Olympics Hackathon](https://lablab.ai/ai-hackathons/milan-ai-week-hackathon) (Milan AI Week, $28k pool)
-- [Transforming Enterprise Through AI](https://lablab.ai/ai-hackathons/techex-intelligent-enterprise-solutions-hackathon) ($10k pool)
+**Currently submitted to:**
+- [Qwen Cloud Global AI Hackathon](https://qwencloud-hackathon.devpost.com/) — deadline 2026-07-09, $7K cash + $3K cloud credit per track. Sentinel runs Qwen-max as Phase 1 triage primary via DashScope OpenAI-compatible endpoint.
 
-Tracks targeted: Intelligent Reasoning · Agentic Workflows · Collaborative Systems · Enterprise Utility · Vultr Enterprise Agent · Google AI Studio.
+**Previously targeted (deadlines passed):** AI Agent Olympics (Milan AI Week, $28k), Transforming Enterprise Through AI ($10k), Bright Data Web Data UNLOCKED ($5k), HackerNoon Proof of Usefulness ($150k pool).
+
+**Tracks emphasized:** Multi-Vendor Orchestration · Agentic Workflows · Real-World Web Grounding · Honest Confidence Calibration · Graceful Degradation as Architecture.
 
 ## Local dev
 
 ```bash
 cp .env.local.example .env.local
-# Fill in:
-#   GOOGLE_GENERATIVE_AI_API_KEY=  (https://aistudio.google.com/apikey — free tier ample)
+# Fill in (defaults expect all three for full 3-vendor demo):
+#   QWEN_API_KEY=                  (https://bailian.console.alibabacloud.com/ — Alibaba account, mainland endpoint)
 #   ANTHROPIC_API_KEY=             (https://console.anthropic.com — paid, $5 free trial)
+#   GOOGLE_GENERATIVE_AI_API_KEY=  (https://aistudio.google.com/apikey — free tier ample)
+# Optional but recommended for live web data:
+#   BRIGHT_DATA_API_KEY=           (https://brightdata.com/cp/api_settings — without, tools fall back to mock)
 bun install
 bun dev
 # Open http://localhost:3000
@@ -67,18 +71,18 @@ Click any incident card → watch the agents work.
 │  (Next.js 16)   │         │                                            │
 └─────────────────┘         │   runIncidentAgent (lib/agent.ts)          │
                             │                                            │
-                            │   PHASE 1 · gemini-2.5-flash · triage      │
+                            │   PHASE 1 · PHASE1_CHAIN · triage          │
                             │     ├─ queryLogs                           │
                             │     ├─ queryMetrics                        │
                             │     └─ checkDeployHistory                  │
                             │             ↓ hand-off                     │
-                            │   PHASE 2 · claude-sonnet-4-6 · investigate│
+                            │   PHASE 2 · PHASE2_CHAIN · investigate     │
                             │     └─ searchRunbook                       │
                             │             ↓ hand-off (vendor flip)       │
-                            │   PHASE 3 · gemini-2.5-flash · review      │
+                            │   PHASE 3 · PHASE3_CHAIN · review          │
                             │     (no tools — pure adversarial critique) │
                             │             ↓ hand-off                     │
-                            │   PHASE 4 · claude-haiku-4-5 · consolidate │
+                            │   PHASE 4 · PHASE4_CHAIN · consolidate     │
                             │     → strict-JSON final report             │
                             └────────────────────────────────────────────┘
 ```
@@ -86,6 +90,8 @@ Click any incident card → watch the agents work.
 ### Why multi-vendor matters
 
 Same-family models share blind spots. When Claude Sonnet's investigation is reviewed by Claude Haiku, both might miss the same class of error. When it's reviewed by Gemini Flash, the structurally different training catches things Claude wouldn't see. Sentinel's adversarial reviewer is **always a different vendor** for this reason.
+
+Each phase reads a comma-separated model chain from env (`PHASE1_CHAIN`, `PHASE2_CHAIN`, `PHASE3_CHAIN`, `PHASE4_CHAIN`). The default for this deploy: Phase 1 Qwen-max → Claude Haiku → Gemini Flash; Phase 2 Claude Sonnet; Phase 3 Gemini Flash; Phase 4 Claude Haiku. Swap vendors without touching any code — deployment = configuration.
 
 ### Files
 
