@@ -63,17 +63,20 @@ Sentinel takes a production incident (P99 latency spike, error budget burn, etc.
 - **Qwen integration**: `@ai-sdk/openai-compatible` pointed at DashScope's OpenAI-compatible endpoint (`https://dashscope.aliyuncs.com/compatible-mode/v1`). No vendor-specific client — same adapter pattern used for every vendor.
 - **Tool layer**: 7 tools — 4 internal mocks (logs/metrics/runbook/deploys) + 3 Bright Data Web Unlocker calls (vendor status, SERP postmortem search, GitHub commits)
 - **Resilience**: Cascading fallback chain at Phase 1 (Qwen → Haiku → Gemini). Mock fallback per BD tool. AbortController propagated through every `streamText` for clean client-disconnect cancellation. Body-size cap on the agent endpoint.
+- **Env-driven model chains**: Each phase reads a `PHASEN_CHAIN` env var — a comma-separated list of model specs (`qwen-max,claude-haiku-4-5,gemini-2.5-flash`). A `resolveModel(spec)` helper maps spec strings to Vercel AI SDK `LanguageModel` instances; a `runPhaseChain` helper cascades through the chain on empty output. This was a deliberate architectural choice: vendor-agnostic by design means deployment = configuration, not code forks. The same repo ships as a Qwen-edition, a Bedrock-edition, or a generic edition by changing four env vars.
 - **Deploy**: Vultr $6/mo SG instance + Cloudflare Tunnel for stable HTTPS without managing certs.
 
 ### Challenges I ran into
 1. **No official `@ai-sdk/qwen` adapter exists** — I confirmed via `npm view` + npm search. Solved by routing Qwen-max through `@ai-sdk/openai-compatible` against DashScope's OpenAI-compat endpoint. Tool calling works identically. Bonus: the architecture stays vendor-agnostic.
 2. **Cascading fallbacks without breaking tool calling** — original code had Gemini → Haiku fallback for empty results. Adding Qwen as primary needed Qwen → Haiku → Gemini chain without losing per-step tool capability. Solved by reusing `runStreamingPhase` helper with `useTools: true` at every fallback level.
 3. **Cross-vendor SSE stream consistency** — Qwen's OpenAI-compat layer returns slightly different streaming chunk shapes than Anthropic / Google native SDKs. Vercel AI SDK 6 abstracted most of this away; the few edge cases (empty `text-delta`) handled by trimming + checking `triageText.trim()`.
+4. **Deciding the codebase shouldn't pretend to be Qwen-first** — the initial Qwen integration hardcoded model names inline. That would mean forking code for every future hackathon (AWS Bedrock, Azure, etc.). Refactored to `PHASEN_CHAIN` env vars + `resolveModel(spec)` so the codebase is genuinely vendor-agnostic: Qwen is just the default chain value, not a special case baked into the logic.
 
 ### Accomplishments
 - **3-vendor cross-family adversarial review**, not just 2 — first prototype I've seen of three families critiquing each other in production-shape code.
 - **Graceful degradation at every layer** — mock fallback per BD tool + cascading model fallback per phase. Live demo survives quota exhaustion, network outage, vendor API limits.
 - **Honest confidence calibration** — Phase 4 system prompt requires "medium" instead of "high" when evidence is incomplete. The output is less impressive-sounding and more useful.
+- **Vendor-agnostic by design** — same codebase ships as Qwen-edition / Bedrock-edition / Generic-edition via env config alone. `PHASE1_CHAIN=qwen-max,claude-haiku-4-5,gemini-2.5-flash` is a default value, not architectural lock-in.
 
 ### What I learned
 - Cross-vendor adversarial review surfaces business-risk concerns that same-family review misses — e.g. "activating async-queue fallback requires finance sign-off" caught only by Gemini reviewing Claude.

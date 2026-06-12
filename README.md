@@ -16,12 +16,12 @@
 
 When your service breaks at 3am, Sentinel investigates, diagnoses, and recommends fixes — like having a senior SRE on call 24/7. It coordinates **four specialized phases across two LLM vendors**, with **live web data fetched via Bright Data** so the agent sees what's broken upstream, not just downstream:
 
-| # | Phase | Model | Role |
+| # | Phase | Model (env-driven) | Role |
 |---|---|---|---|
-| 1 | 🔍 Triage | `qwen-max` (Qwen primary) → `claude-haiku-4-5` (fallback) → `gemini-2.5-flash` (fallback) | Internal telemetry + **Bright Data scrape of vendor status pages** |
-| 2 | 🧠 Investigate | `claude-sonnet-4-6` (Anthropic) | Deep reasoning + **Bright Data SERP search for public postmortems** + GitHub commit history |
-| 3 | ⚔️ Adversarial review | `gemini-2.5-flash` (Google) | Stress-test Claude's diagnosis with different vendor bias |
-| 4 | 📋 Consolidate | `claude-haiku-4-5` (Anthropic) | Strict-JSON action plan synthesis |
+| 1 | 🔍 Triage | `PHASE1_CHAIN` — default: `qwen-max` → `claude-haiku-4-5` → `gemini-2.5-flash` | Internal telemetry + **Bright Data scrape of vendor status pages** |
+| 2 | 🧠 Investigate | `PHASE2_CHAIN` — default: `claude-sonnet-4-6` | Deep reasoning + **Bright Data SERP search for public postmortems** + GitHub commit history |
+| 3 | ⚔️ Adversarial review | `PHASE3_CHAIN` — default: `gemini-2.5-flash` | Stress-test the investigation with a structurally different vendor |
+| 4 | 📋 Consolidate | `PHASE4_CHAIN` — default: `claude-haiku-4-5` | Strict-JSON action plan synthesis |
 
 ### Tools (7 total: 4 internal mock + 3 Bright Data live)
 
@@ -67,18 +67,18 @@ Click any incident card → watch the agents work.
 │  (Next.js 16)   │         │                                            │
 └─────────────────┘         │   runIncidentAgent (lib/agent.ts)          │
                             │                                            │
-                            │   PHASE 1 · qwen-max (→haiku→gemini) · triage│
+                            │   PHASE 1 · PHASE1_CHAIN · triage          │
                             │     ├─ queryLogs                           │
                             │     ├─ queryMetrics                        │
                             │     └─ checkDeployHistory                  │
                             │             ↓ hand-off                     │
-                            │   PHASE 2 · claude-sonnet-4-6 · investigate│
+                            │   PHASE 2 · PHASE2_CHAIN · investigate     │
                             │     └─ searchRunbook                       │
                             │             ↓ hand-off (vendor flip)       │
-                            │   PHASE 3 · gemini-2.5-flash · review      │
+                            │   PHASE 3 · PHASE3_CHAIN · review          │
                             │     (no tools — pure adversarial critique) │
                             │             ↓ hand-off                     │
-                            │   PHASE 4 · claude-haiku-4-5 · consolidate │
+                            │   PHASE 4 · PHASE4_CHAIN · consolidate     │
                             │     → strict-JSON final report             │
                             └────────────────────────────────────────────┘
 ```
@@ -86,6 +86,8 @@ Click any incident card → watch the agents work.
 ### Why multi-vendor matters
 
 Same-family models share blind spots. When Claude Sonnet's investigation is reviewed by Claude Haiku, both might miss the same class of error. When it's reviewed by Gemini Flash, the structurally different training catches things Claude wouldn't see. Sentinel's adversarial reviewer is **always a different vendor** for this reason.
+
+Each phase reads a comma-separated model chain from env (`PHASE1_CHAIN`, `PHASE2_CHAIN`, `PHASE3_CHAIN`, `PHASE4_CHAIN`). The default for this deploy: Phase 1 Qwen-max → Claude Haiku → Gemini Flash; Phase 2 Claude Sonnet; Phase 3 Gemini Flash; Phase 4 Claude Haiku. Swap vendors without touching any code — deployment = configuration.
 
 ### Files
 
